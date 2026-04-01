@@ -7,7 +7,7 @@ from datetime import datetime
 # ==========================================
 # CONFIGURATIE - HOMEWIZARD KWH METER
 # ==========================================
-HW_IP = "192.168.0.46"  # Jouw HomeWizard IP-adres
+HW_IP = "94.110.235.108:8081"  # Jouw HomeWizard IP-adres
 URL = f"http://{HW_IP}/api/v1/data"
 PEAK_FILE = "hoogste_piek.txt"
 

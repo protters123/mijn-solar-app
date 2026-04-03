@@ -51,25 +51,22 @@ try:
     # We halen de data op als tekst
     response = requests.get(CSV_URL, timeout=5)
     
-    # We negeren de headers van Google en zetten onze eigen koppen erop
-    # Dit voorkomt de "Kolom Datum niet gevonden" fout
-    df = pd.read_csv(io.StringIO(response.text), header=None, skiprows=1)
+    # We laden de data ZONDER rijen over te slaan (skiprows=0)
+    # Zo pakken we alles wat Google Sheets stuurt
+    df = pd.read_csv(io.StringIO(response.text))
     
     if not df.empty:
-        # We pakken alleen de eerste 4 kolommen
-        table_df = df.iloc[:, :4]
-        table_df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
+        # We hernoemen de kolommen handmatig zodat het altijd klopt
+        # We gaan ervan uit dat je 4 kolommen hebt: Datum, Symo, Galvo, Totaal
+        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
         
-        # We maken de getallen mooi groen en de datum wit (standaard Streamlit tabel)
-        # Sorteer: Nieuwste dag bovenaan
-        st.table(table_df.iloc[::-1])
+        # We tonen de data direct, met de nieuwste rijen boven
+        st.table(df.iloc[::-1])
     else:
         st.info("De spreadsheet lijkt leeg.")
 
 except Exception as e:
     st.warning("Aan het wachten op de juiste tabeldata van Google...")
-    # Als je wilt zien wat Google écht stuurt, haal dan het hekje hieronder weg:
-    # st.write(pd.read_csv(io.StringIO(requests.get(CSV_URL).text)).head())
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

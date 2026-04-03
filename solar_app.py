@@ -5,15 +5,14 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
+# SOLAR PIEK PRO - DE NIEUWE AANPAK 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
-SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
-CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
+# We gebruiken de DIRECTE link naar je gepubliceerde data
+SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -35,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records in geheugen
+# Update records
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -61,24 +60,19 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (GEFORCEERD) ---
+# --- GRAFIEK (DE NIEUWE MANIER) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de CSV data via de gecorrigeerde link
-    df = pd.read_csv(CSV_URL)
+    # We laden de data via de 'pub?output=csv' link
+    df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
-        chart_data = pd.DataFrame({
-            'Dag': df.iloc[:, 0].astype(str),
-            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
-        }).dropna()
-        # Teken de balkjes
-        st.bar_chart(data=chart_data, x='Dag', y='Watt')
-    else:
-        st.info("Nog geen data gevonden in de sheet.")
-except Exception as e:
-    st.info("Grafiek laden...")
+        # We pakken de eerste kolom voor de Dag en de laatste voor de Piek
+        # We dwingen 'Piek' naar een getal
+        df.iloc[:, -1] = pd.to_numeric(df.iloc[:, -1], errors='coerce')
+        st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
+except Exception:
+    st.info("De grafiek verschijnt zodra de data uit Google Sheets binnenkomt.")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
 time.sleep(2)
 st.rerun()

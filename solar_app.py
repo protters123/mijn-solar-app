@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE GRAFIEK FIX
+# SOLAR PIEK PRO - FINALE GRAFIEK FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -19,8 +19,8 @@ st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="cent
 # --- RECORDS UIT SECRETS ---
 if 'p_total' not in st.session_state:
     st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
-    st.session_state.p_galvo = st.secrets.get("galvo_piek", 0.0)
-    st.session_state.p_total = st.secrets.get("totaal_piek", 3711.0)
+    st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
+    st.session_state.p_total = st.secrets.get("totaal_piek", 3717.0)
 
 def fetch_status(url):
     try:
@@ -34,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records in geheugen
+# Update records
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -60,27 +60,24 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK SECTIE (ULTRA-STABIEL) ---
+# --- GRAFIEK (MAANDOVERZICHT) ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We downloaden de data
+    # We downloaden de CSV en maken de data schoon
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We maken een nieuwe tabel met alleen de noodzakelijke data voor de grafiek
-        # We pakken de 1e kolom (Datum) en de 4e kolom (Totaal)
+        # We pakken de eerste kolom (Datum) en de laatste (Piek_Totaal)
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
-            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
-        })
-        # Verwijder lege regels
-        chart_data = chart_data.dropna()
-        # Teken de grafiek
-        st.bar_chart(data=chart_data, x='Dag', y='Watt')
+            'Piek': pd.to_numeric(df.iloc[:, -1], errors='coerce')
+        }).dropna()
+        # Teken de balkjes
+        st.bar_chart(data=chart_data, x='Dag', y='Piek')
     else:
         st.info("Vul een datum en piek in je Google Sheet in.")
 except Exception as e:
-    st.info("Grafiek aan het laden... (Zorg dat je Sheet is 'Gepubliceerd op internet')")
+    st.info("Grafiek aan het laden...")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)
 st.rerun()

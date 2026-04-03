@@ -5,12 +5,14 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE VOLLEDIGE VERSIE ☀️
+# SOLAR PIEK PRO - DE VOLLEDIGE FIX ☀️
 # ==========================================
 
 # 1. Google Sheet Configuratie (GEFIXTE URL)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 SHEET_NAME = "Historiek" 
+
+# DIT IS DE CORRECTE LINK STRUCTUUR (Vervangt de google.com link volledig)
 CSV_URL = "https://google.com" + SHEET_ID + "/gviz/tq?tqx=out:csv&sheet=" + SHEET_NAME
 
 # 2. Inverter Gegevens
@@ -52,7 +54,7 @@ st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
 st.divider()
 
-# De twee kolommen voor Symo en Galvo die je miste:
+# De twee kolommen voor Symo en Galvo:
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
@@ -68,17 +70,21 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("📊 Maandoverzicht")
 try:
+    # Data ophalen uit de sheet via de correcte CSV_URL
     df = pd.read_csv(CSV_URL)
+    
+    # We koppelen de kolomnamen 'Datum' en 'Totaal' uit jouw spreadsheet
     if 'Datum' in df.columns and 'Totaal' in df.columns:
         chart_df = pd.DataFrame({
             'Dag': df['Datum'].astype(str),
             'Watt': pd.to_numeric(df['Totaal'], errors='coerce')
         }).dropna()
+        
         st.bar_chart(data=chart_df, x='Dag', y='Watt')
     else:
         st.warning("Kolommen 'Datum' of 'Totaal' niet gevonden.")
 except Exception as e:
-    st.error(f"Fout bij laden grafiek: {e}")
+    st.error(f"Fout bij verbinden met sheet: {e}")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 

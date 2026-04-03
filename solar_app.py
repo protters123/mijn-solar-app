@@ -9,7 +9,7 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
+# DE ENIGE CORRECTE LINK VOOR JOUW DATA:
 CSV_URL = "https://google.com"
 
 # INVERTER IP'S
@@ -67,20 +67,20 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # Ophalen van data
+    # Ophalen van data met een korte timeout
     response = requests.get(CSV_URL, timeout=5)
     
-    # Check of de data echt tekst is en geen HTML-website
+    # We controleren of de data echt tekst is en geen HTML-website
     if response.status_code == 200 and not response.text.strip().lower().startswith("<!doctype html"):
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # Sorteer nieuwste bovenaan
+            # We tonen de data direct, met de nieuwste rijen boven
             st.dataframe(df.iloc[::-1], use_container_width=True, hide_index=True)
         else:
             st.info("De spreadsheet is momenteel leeg.")
     else:
-        st.error("Wacht op data van Google Sheets...")
+        st.error("Google geeft nog geen CSV-data vrij. Controleer de publicatie-instellingen.")
 except Exception as e:
     st.warning(f"Data wordt geladen... ({e})")
 

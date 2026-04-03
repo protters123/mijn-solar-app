@@ -42,7 +42,7 @@ def fetch_data(url):
 # ==========================================
 # INTERFACE
 # ==========================================
-st.set_page_config(page_title="Dennis Solar Piek Check", page_icon="☀️", layout="centered")
+st.set_page_config(page_title="Dennis Solar Piek", page_icon="☀️", layout="centered")
 st.title("☀️ Dennis Solar Piek Check")
 
 # Data ophalen
@@ -93,5 +93,5 @@ with col_b:
 
 # Tijd & Auto-refresh
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 5 sec")
-time.sleep(5)
+time.sleep(2)
 st.rerun()

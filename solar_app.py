@@ -64,15 +64,15 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We lezen de data in en dwingen Python om de kolommen goed te zetten
     df = pd.read_csv(CSV_URL)
     if not df.empty:
-        # We pakken de eerste kolom (Datum) en de laatste (Piek_Totaal)
+        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
+        df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0]).dt.date
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
     else:
-        st.info("Nog geen data in de Google Sheet gevonden.")
-except Exception as e:
-    st.info("Grafiek wordt geladen zodra er data in de Google Sheet staat.")
+        st.info("Vul data in rij 1 en 2 van je Google Sheet in.")
+except Exception:
+    st.info("Zorg dat je tabblad 'Historiek' heet en is gepubliceerd op internet.")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

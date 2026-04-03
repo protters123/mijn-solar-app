@@ -61,7 +61,7 @@ with c2:
 st.divider()
 
 # --- GRAFIEK (MAANDOVERZICHT) ---
-st.subheader("📅 Maandoverzicht")
+st.subheader("💚 Maandoverzicht")
 try:
     # We downloaden de CSV en maken de data schoon
     df = pd.read_csv(SHEET_URL)

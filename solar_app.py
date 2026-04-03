@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE GRAFIEK FIX
+# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -42,7 +42,7 @@ if val_t > st.session_state.p_total:
     st.balloons()
 
 # --- DISPLAY ---
-st.title("☀️ Solar Piek Pro")
+st.title("💚 Solar Piek Pro")
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
@@ -63,19 +63,19 @@ st.divider()
 # --- GRAFIEK (MAANDOVERZICHT) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de CSV en maken de data schoon
+    # We downloaden de CSV en dwingen de data naar getallen
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We pakken de eerste kolom (Datum) en de laatste (Piek_Totaal)
+        # We maken een schone tabel voor de grafiek
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
-            'Piek': pd.to_numeric(df.iloc[:, -1], errors='coerce')
+            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
         }).dropna()
-        # Teken de balkjes
-        st.bar_chart(data=chart_data, x='Dag', y='Piek')
+        # Toon als balkjes
+        st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
-        st.info("Vul een datum en piek in je Google Sheet in.")
-except Exception as e:
+        st.info("Nog geen data gevonden in de Google Sheet.")
+except Exception:
     st.info("Grafiek aan het laden...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")

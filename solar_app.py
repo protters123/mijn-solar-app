@@ -2,17 +2,17 @@ import streamlit as st
 import requests
 import time
 import pandas as pd
-import random
+import io
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE TABEL FIX ☀️
+# SOLAR PIEK PRO - DE "FORCEER" TABEL FIX ☀️
 # ==========================================
 
-# 1. DE LINK (Directe CSV link van jouw sheet)
+# DE DIRECTE CSV LINK
 CSV_URL = "https://google.com"
 
-# 2. INVERTER IP'S
+# INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
@@ -66,23 +66,23 @@ st.divider()
 
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
+
 try:
-    # We voegen een random getal toe om caching te voorkomen
-    fresh_url = f"{CSV_URL}&cache={random.randint(1, 100000)}"
-    
-    # We laden de data met automatische kolomherkenning
-    df = pd.read_csv(fresh_url)
-    
-    if not df.empty:
-        # We hernoemen de kolommen handmatig zodat het altijd klopt (1=Datum, 2=Symo, 3=Galvo, 4=Totaal)
-        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
+    # We gebruiken requests om de data op te halen (stabieler)
+    response = requests.get(CSV_URL, timeout=5)
+    if response.status_code == 200:
+        # We zetten de tekst om naar een tabel
+        df = pd.read_csv(io.StringIO(response.text))
         
-        # We tonen de data direct, met de nieuwste rijen boven
-        st.table(df.iloc[::-1])
+        if not df.empty:
+            # We tonen de data direct, met de nieuwste rijen boven
+            st.table(df.iloc[::-1])
+        else:
+            st.info("De spreadsheet is leeg.")
     else:
-        st.info("De spreadsheet is leeg.")
-except Exception:
-    st.warning("Data wordt geladen...")
+        st.warning("Google geeft geen data vrij. Controleer 'Publiceren op internet'.")
+except Exception as e:
+    st.error(f"Verbindingsfout: {e}")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

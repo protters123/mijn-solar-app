@@ -5,13 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX
+# SOLAR PIEK PRO - NOOD-FIX GRAFIEK
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET ID
+# JOUW GOOGLE SHEET LINK (DIRECTE CSV EXPORT)
 SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
@@ -26,8 +26,7 @@ if 'p_total' not in st.session_state:
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
-        val = abs(float(r['active_power_w']))
-        return val, "🟢"
+        return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
 # --- LIVE DATA ---
@@ -35,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records in geheugen
+# Update records
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -61,18 +60,15 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK SECTIE ---
+# --- DE GRAFIEK ---
 st.subheader("📅 Maandoverzicht")
 try:
     df = pd.read_csv(CSV_URL)
     if not df.empty:
-        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
-        df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0]).dt.date
-        st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
-    else:
-        st.info("Vul data in rij 1 en 2 van je Google Sheet in.")
-except Exception:
-    st.info("Zorg dat je tabblad 'Historiek' heet en is gepubliceerd op internet.")
+        # Teken grafiek: Datum op X-as, Totaal op Y-as
+        st.bar_chart(data=df, x=df.columns[0], y=df.columns[3])
+except:
+    st.info("Zorg dat je de sheet hebt 'Gepubliceerd op internet' via het menu Bestand.")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

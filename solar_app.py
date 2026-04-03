@@ -5,16 +5,16 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX 💚
+# SOLAR PIEK PRO - FINALE FIX MET NIEUWE ID 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
-# Deze link wijst nu direct naar de data in je bestand 'Historiek'
-SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
-CSV_URL = f"https://google.com"
+# JOUW NIEUWE GOOGLE SHEET ID (GEBASEERD OP JE SCREENSHOT)
+SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+# De directe CSV-link voor het tabblad 'Historiek'
+CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -36,7 +36,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Update records in geheugen
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -62,10 +62,10 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (GEFORCEERD) ---
+# --- GRAFIEK SECTIE (FIXED) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de CSV en negeren de kolomnamen
+    # We lezen de data direct van de web-link via de nieuwe ID
     df = pd.read_csv(CSV_URL)
     if not df.empty:
         # We pakken de eerste kolom (Datum) en de laatste (Totaal)
@@ -73,12 +73,12 @@ try:
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
         }).dropna()
-        # Teken de balkjes
+        # Teken de balkjes!
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
         st.info("Nog geen data gevonden in de sheet.")
-except Exception as e:
-    st.info("Grafiek laden... (Check of je in Google Sheets op Publiceren hebt geklikt)")
+except Exception:
+    st.info("Grafiek aan het laden... (Check of je in Google Sheets op Publiceren hebt geklikt)")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

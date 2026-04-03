@@ -43,7 +43,7 @@ def fetch_data(url):
 # INTERFACE
 # ==========================================
 st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
-st.title("☀️ Solar Piek Check")
+st.title("☀️ Solar Piek")
 
 # Data ophalen
 val_symo = fetch_data(URL_1)

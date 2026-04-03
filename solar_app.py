@@ -11,7 +11,7 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# We gebruiken de DIRECTE link naar je gepubliceerde data
+# We gebruiken de DIRECTE link naar je gepubliceerde data (CSV export)
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -66,9 +66,11 @@ try:
     # We laden de data via de 'pub?output=csv' link
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We pakken de eerste kolom voor de Dag en de laatste voor de Piek
-        # We dwingen 'Piek' naar een getal
+        # We maken de kolomnamen schoon van eventuele spaties
+        df.columns = [c.strip() for c in df.columns]
+        # We dwingen de laatste kolom (Totaal) naar een getal voor de balkjes
         df.iloc[:, -1] = pd.to_numeric(df.iloc[:, -1], errors='coerce')
+        # Teken de grafiek: X-as is de eerste kolom (Datum), Y-as is de laatste (Totaal)
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
 except Exception:
     st.info("De grafiek verschijnt zodra de data uit Google Sheets binnenkomt.")

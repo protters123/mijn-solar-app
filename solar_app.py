@@ -69,13 +69,14 @@ try:
     df = pd.read_csv(CSV_URL)
     
     if not df.empty:
-        # We maken de tabel precies zoals in je screenshot: Datum, Symo, Galvo, Totaal
+        # We pakken de kolommen op hun plek (0=Datum, 1=Symo, 2=Galvo, 3=Totaal)
+        # Zo krijgt de code geen foutmelding meer op namen als 'Datum'
         table_df = pd.DataFrame({
-            'Datum': df['Datum'].astype(str),
-            'Symo (W)': df['Symo'],
-            'Galvo (W)': df['Galvo'],
-            'Totaal (W)': df['Totaal']
-        }).dropna(how='all') # Verwijdert lege rijen
+            'Datum': df.iloc[:, 0].astype(str),
+            'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+            'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+            'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
+        }).dropna(how='all')
         
         # Sorteer: Nieuwste dag bovenaan
         st.table(table_df.iloc[::-1])
@@ -83,6 +84,7 @@ try:
         st.info("Nog geen historische data gevonden.")
 except Exception as e:
     st.error(f"Fout bij laden tabel: {e}")
+
 
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")

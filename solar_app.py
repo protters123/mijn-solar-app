@@ -76,15 +76,16 @@ try:
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # We maken de tabel exact zoals in je Google Sheet
+            # We maken de tabel op basis van de eerste 4 kolommen in je sheet
+            # 0=Datum, 1=Symo, 2=Galvo, 3=Totaal
             table_df = pd.DataFrame({
-                'Datum': df['Datum'].astype(str),
-                'Symo (W)': pd.to_numeric(df['Symo'], errors='coerce'),
-                'Galvo (W)': pd.to_numeric(df['Galvo'], errors='coerce'),
-                'Totaal (W)': pd.to_numeric(df['Totaal'], errors='coerce')
-            }).dropna(subset=['Datum'])
+                'Datum': df.iloc[:, 0].astype(str),
+                'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+                'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+                'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
+            })
             
-            # Nieuwste dag bovenaan tonen
+            # Sorteer: Nieuwste dag bovenaan tonen
             st.table(table_df.iloc[::-1])
         else:
             st.info("De spreadsheet is momenteel leeg.")
@@ -93,6 +94,6 @@ except Exception:
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 
-# Refresh pagina
+# Refresh pagina elke 2 seconden
 time.sleep(2)
 st.rerun()

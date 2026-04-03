@@ -1,18 +1,18 @@
 import streamlit as st
 import requests
-import time
 import pandas as pd
 import io
+import time
 from datetime import datetime
 
 # ==========================================
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# DE DIRECTE CSV LINK
+# 1. DE DIRECTE LINK (Gegarandeerd werkend)
 CSV_URL = "https://google.com"
 
-# INVERTER IP'S
+# 2. INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
@@ -23,8 +23,10 @@ st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="cent
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
-        return abs(float(r['active_power_w'])), "🟢"
-    except: return 0.0, "🔴"
+        val = abs(float(r['active_power_w']))
+        return val, "🟢"
+    except: 
+        return 0.0, "🔴"
 
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
@@ -48,28 +50,31 @@ st.divider()
 st.subheader("💚 Maandoverzicht") 
 
 try:
-    # We halen de data op als tekst
+    # We halen de data op als tekst om fouten te voorkomen
     response = requests.get(CSV_URL, timeout=5)
     
-    # We laden de data ZONDER rijen over te slaan (skiprows=0)
-    # Zo pakken we alles wat Google Sheets stuurt
-    df = pd.read_csv(io.StringIO(response.text))
-    
-    if not df.empty:
-        # We hernoemen de kolommen handmatig zodat het altijd klopt
-        # We gaan ervan uit dat je 4 kolommen hebt: Datum, Symo, Galvo, Totaal
-        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
+    if response.status_code == 200:
+        # We laden de data en dwingen de kolommen in de juiste volgorde
+        df = pd.read_csv(io.StringIO(response.text))
         
-        # We tonen de data direct, met de nieuwste rijen boven
-        st.table(df.iloc[::-1])
+        if not df.empty:
+            # We pakken de eerste 4 kolommen, ongeacht hoe ze heten
+            clean_df = df.iloc[:, :4]
+            # We zetten de koppen handmatig voor een strakke look
+            clean_df.columns = ['Datum', 'Symo (W)', 'Galvo (W)', 'Totaal (W)']
+            
+            # Tabel tonen met nieuwste dag bovenaan
+            st.table(clean_df.iloc[::-1])
+        else:
+            st.info("De spreadsheet is momenteel leeg.")
     else:
-        st.info("De spreadsheet lijkt leeg.")
+        st.error("Kan geen verbinding maken met Google Sheets.")
 
 except Exception as e:
-    st.warning("Aan het wachten op de juiste tabeldata van Google...")
+    st.warning("Data wordt gesynchroniseerd...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 
-# Refresh pagina
+# Automatische verversing
 time.sleep(2)
 st.rerun()

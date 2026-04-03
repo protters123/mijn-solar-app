@@ -42,7 +42,7 @@ def fetch_data(url):
 # ==========================================
 # INTERFACE
 # ==========================================
-st.set_page_config(page_title="Dennis Solar Piek", page_icon="☀️", layout="centered")
+st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
 st.title("☀️ Dennis Solar Piek Check")
 
 # Data ophalen

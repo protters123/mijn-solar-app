@@ -8,9 +8,11 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# 1. Google Sheet Configuratie (GEFIXTE URL)
+# 1. Google Sheet Configuratie (HIER ZAT DE FOUT)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-SHEET_NAME = "Historiek"  # Let op de hoofdletter 'H' zoals in je sheet
+SHEET_NAME = "Historiek" 
+
+# DE CORRECTE URL STRUCTUUR:
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
 
 # 2. Inverter Gegevens (Publiek IP)

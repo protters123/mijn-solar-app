@@ -11,7 +11,7 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK
+# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -60,21 +60,22 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK ---
+# --- GRAFIEK (MAANDOVERZICHT) ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We downloaden de CSV en maken de kolomnamen schoon
+    # We downloaden de CSV data
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
+        # We maken de kolomnamen schoon van spaties
         df.columns = [c.strip() for c in df.columns]
-        # We dwingen de laatste kolom naar getallen
+        # We dwingen de laatste kolom (Totaal) naar getallen voor de balkjes
         df[df.columns[-1]] = pd.to_numeric(df[df.columns[-1]], errors='coerce')
         # Datum kolom als X-as, Laatste kolom (Piek_Totaal) als Y-as
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
     else:
         st.info("Nog geen data gevonden in de sheet.")
-except Exception:
-    st.info("Grafiek laden...")
+except Exception as e:
+    st.info("Grafiek aan het laden...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

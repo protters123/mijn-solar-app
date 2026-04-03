@@ -5,13 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE ALLERLAATSTE POGING
+# SOLAR PIEK PRO - DE DEFINITIEVE GRAFIEK FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET LINK (DIRECTE CSV EXPORT)
+# JOUW GEPUBLICEERDE CSV LINK
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -19,8 +19,8 @@ st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="cent
 # --- RECORDS UIT SECRETS ---
 if 'p_total' not in st.session_state:
     st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
-    st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
-    st.session_state.p_total = st.secrets.get("totaal_piek", 3717.0)
+    st.session_state.p_galvo = st.secrets.get("galvo_piek", 0.0)
+    st.session_state.p_total = st.secrets.get("totaal_piek", 3711.0)
 
 def fetch_status(url):
     try:
@@ -34,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Update records in geheugen
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -60,21 +60,27 @@ with c2:
 
 st.divider()
 
-# --- DE GRAFIEK (DIT MOET WERKEN) ---
+# --- GRAFIEK SECTIE (ULTRA-STABIEL) ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We lezen de data direct van de web-link
-    df_chart = pd.read_csv(SHEET_URL)
-    if not df_chart.empty:
-        # We maken de kolomnamen simpel: 'A', 'B', 'C', 'D'
-        df_chart.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
-        # We tekenen alleen de Datum en het Totaal
-        st.bar_chart(data=df_chart, x='Datum', y='Totaal')
+    # We downloaden de data
+    df = pd.read_csv(SHEET_URL)
+    if not df.empty:
+        # We maken een nieuwe tabel met alleen de noodzakelijke data voor de grafiek
+        # We pakken de 1e kolom (Datum) en de 4e kolom (Totaal)
+        chart_data = pd.DataFrame({
+            'Dag': df.iloc[:, 0].astype(str),
+            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
+        })
+        # Verwijder lege regels
+        chart_data = chart_data.dropna()
+        # Teken de grafiek
+        st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
-        st.info("Vul data in rij 2 van je Google Sheet in.")
+        st.info("Vul een datum en piek in je Google Sheet in.")
 except Exception as e:
-    st.info("De grafiek verschijnt zodra de Google Sheet is gepubliceerd.")
+    st.info("Grafiek aan het laden... (Zorg dat je Sheet is 'Gepubliceerd op internet')")
 
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
 time.sleep(2)
 st.rerun()

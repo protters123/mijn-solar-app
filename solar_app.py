@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX
+# SOLAR PIEK PRO - FINALE GRAFIEK FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -34,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Records updaten
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -52,31 +52,30 @@ c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_symo} W")
+    st.caption(f"Piek: {st.session_state.p_symo} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_galvo} W")
+    st.caption(f"Piek: {st.session_state.p_galvo} W")
 
 st.divider()
 
-# --- GRAFIEK SECTIE (ULTRA SIMPEL) ---
+# --- GRAFIEK ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We downloaden de CSV en negeren alle headers
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We pakken de eerste kolom als X en de laatste als Y
-        chart_data = pd.DataFrame({
-            'Datum': df.iloc[:, 0].astype(str),
-            'Piek': df.iloc[:, -1].astype(float)
-        })
-        st.bar_chart(data=chart_data, x='Datum', y='Piek')
+        # We maken de kolomnamen schoon van spaties
+        df.columns = [c.strip() for c in df.columns]
+        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
+        # We zorgen dat de Piek-kolom echt als getal wordt gezien
+        df[df.columns[-1]] = pd.to_numeric(df[df.columns[-1]], errors='coerce')
+        st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
     else:
         st.info("Nog geen data gevonden in de sheet.")
 except Exception as e:
-    st.info("De grafiek verschijnt zodra er data in het tabblad 'Historiek' staat.")
+    st.info("Grafiek laden...")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)
 st.rerun()

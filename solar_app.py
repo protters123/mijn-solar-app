@@ -5,14 +5,16 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW NIEUWE GEPUBLICEERDE CSV LINK
-SHEET_ID = "https://google.com"
+# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
+# Deze link wijst nu direct naar de data in je bestand 'Historiek'
+SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
+CSV_URL = f"https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -60,26 +62,24 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (MAANDOVERZICHT) ---
+# --- GRAFIEK (GEFORCEERD) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de CSV
-    df = pd.read_csv(SHEET_URL)
+    # We downloaden de CSV en negeren de kolomnamen
+    df = pd.read_csv(CSV_URL)
     if not df.empty:
-        # We maken de kolomnamen schoon
-        df.columns = [c.strip() for c in df.columns]
-        # We pakken de eerste en laatste kolom
+        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
         }).dropna()
-        # Teken de grafiek
+        # Teken de balkjes
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
         st.info("Nog geen data gevonden in de sheet.")
 except Exception as e:
-    st.info("Grafiek wordt geladen...")
+    st.info("Grafiek laden... (Check of je in Google Sheets op Publiceren hebt geklikt)")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)
 st.rerun()

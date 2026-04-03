@@ -12,7 +12,7 @@ URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 # JOUW NIEUWE GEPUBLICEERDE CSV LINK
-SHEET_ID = "https://docs.google.com"
+SHEET_ID = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 

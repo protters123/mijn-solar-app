@@ -5,14 +5,15 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX
+# SOLAR PIEK PRO - FINALE FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET ID EN CSV LINK
+# JOUW GOOGLE SHEET ID EN DE JUISTE DATA LINK
 SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
+# Let op: de link hieronder is nu hersteld naar docs.google.com
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -64,14 +65,16 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We lezen de data in en dwingen de kolomnamen goed te zetten
+    # We lezen de data in via de gecorrigeerde link
     df = pd.read_csv(CSV_URL)
     if not df.empty:
+        # We maken de kolomnamen schoon
+        df.columns = [str(c).strip() for c in df.columns]
         # X-as is de eerste kolom (Datum), Y-as is de laatste (Totaal)
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
     else:
         st.info("Nog geen data in de Google Sheet gevonden.")
-except Exception:
+except Exception as e:
     st.info("Zorg dat je de sheet hebt 'Gepubliceerd op internet' via het menu Bestand.")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")

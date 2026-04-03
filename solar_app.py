@@ -13,7 +13,7 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 # JOUW GOOGLE SHEET CONFIGURATIE (GEFIXTE URL)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-SHEET_NAME = "Historiek"  # Exacte naam van je tabblad uit de afbeelding
+SHEET_NAME = "Historiek"  # Let op de hoofdletter 'H' zoals in je sheet
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -65,10 +65,11 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("📊 Maandoverzicht")
 try:
+    # Lees de data in via de nieuwe CSV_URL
     df = pd.read_csv(CSV_URL)
     
     if not df.empty:
-        # We gebruiken exact de kolomnamen uit jouw spreadsheet: 'Datum' en 'Totaal'
+        # Gebruik de kolomnamen 'Datum' en 'Totaal' uit je spreadsheet
         chart_df = pd.DataFrame({
             'Dag': df['Datum'].astype(str),
             'Watt': pd.to_numeric(df['Totaal'], errors='coerce')
@@ -79,9 +80,8 @@ try:
         st.info("De spreadsheet is leeg.")
 except Exception as e:
     st.error(f"Fout bij laden: {e}")
-    st.info("💡 Tip: Zorg dat de Sheet op 'Iedereen met de link' staat.")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 
 # Automatische verversing
 time.sleep(2)

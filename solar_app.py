@@ -71,6 +71,7 @@ try:
     
     if not df.empty:
         # We pakken de kolommen op positie: 0=Datum, 1=Symo, 2=Galvo, 3=Totaal
+        # Gebruik pd.to_numeric met errors='coerce' om de cijfers groen te laten oplichten in Streamlit
         table_df = pd.DataFrame({
             'Datum': df.iloc[:, 0].astype(str),
             'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),

@@ -8,12 +8,12 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# 1. Configuur de Google Sheet link (GEFIXTE URL)
+# 1. Google Sheet Configuratie (GEFIXTE URL)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 SHEET_NAME = "Historiek"  # Let op de hoofdletter 'H' zoals in je sheet
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
 
-# 2. Inverter Gegevens
+# 2. Inverter Gegevens (Publiek IP)
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
@@ -42,7 +42,7 @@ if val_t > st.session_state.p_total:
     st.session_state.p_total = val_t
     st.balloons()
 
-# --- Dashboard ---
+# --- Dashboard UI ---
 st.title("💚 Solar Piek Pro")
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")

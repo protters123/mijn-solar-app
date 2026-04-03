@@ -5,17 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
+# SOLAR PIEK PRO - DE WERKENDE VERSIE ☀️
 # ==========================================
 
-# 1. Google Sheet Configuratie (GEFIXTE URL VOOR CSV EXPORT)
-SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-SHEET_NAME = "Historiek" 
+# JOUW DIRECTE CSV LINK (Deze werkte het best)
+CSV_URL = "https://google.com"
 
-# DIT IS DE ENIGE CORRECTE LINK OM DATA OP TE HALEN:
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
-
-# 2. Inverter Gegevens
+# INVERTER GEGEVENS
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
@@ -70,7 +66,7 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # We lezen de data direct van de export link
+    # We lezen de data direct van je werkende link
     df = pd.read_csv(CSV_URL)
     
     if not df.empty:

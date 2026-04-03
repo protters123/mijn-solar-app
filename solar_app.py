@@ -5,11 +5,11 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - VOLLEDIGE FIX ☀️
+# SOLAR PIEK PRO - DE FINITIEVE LOOK ☀️
 # ==========================================
 
 # JOUW DIRECTE CSV LINK
-CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZcT5oWna6hU_PI7awD7tuL6OiMLxAuUNTuBEXqZZo_IPTmRYuOp39HXuvcIyl0Kxyk7rArpdhaKhn/pub?gid=0&single=true&output=csv"
+CSV_URL = "https://google.com"
 
 # INVERTER GEGEVENS
 PUBLIEK_IP = "94.110.235.108" 
@@ -44,7 +44,7 @@ if val_t > st.session_state.p_total:
     st.balloons()
 
 # --- DASHBOARD UI ---
-st.title("💚 Solar Piek Pro")
+st.title("☀️ Solar Piek Pro") # De zon staat nu hier
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
@@ -64,18 +64,14 @@ with c2:
 st.divider()
 
 # --- GRAFIEK SECTIE ---
-st.subheader("📊 Maandoverzicht")
+st.subheader("💚 Maandoverzicht") # Het groene hartje staat nu hier
 try:
-    # We lezen de data direct van je link
     df = pd.read_csv(CSV_URL)
-    
     if not df.empty:
-        # We gebruiken de kolomnamen 'Datum' en 'Totaal' uit je sheet
         chart_df = pd.DataFrame({
             'Dag': df['Datum'].astype(str),
             'Watt': pd.to_numeric(df['Totaal'], errors='coerce')
         }).dropna()
-        
         st.bar_chart(data=chart_df, x='Dag', y='Watt')
     else:
         st.info("De spreadsheet is leeg.")

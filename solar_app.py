@@ -89,7 +89,7 @@ with col_a:
 with col_b:
     st.subheader("🔸 Fronius Galvo")
     st.metric("Nu", f"{val_galvo:,.0f} W" if val_galvo is not None else "Offline")
-    st.metric("🏆 Piek", f"{p_galvo:,.0f} W")
+    st.metric("🏆 Piek Galvo", f"{p_galvo:,.0f} W")
 
 # Tijd & Auto-refresh
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")

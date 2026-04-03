@@ -92,6 +92,6 @@ with col_b:
     st.metric("🏆 Piek", f"{p_galvo:,.0f} W")
 
 # Tijd & Auto-refresh
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 5 sec")
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
 time.sleep(2)
 st.rerun()

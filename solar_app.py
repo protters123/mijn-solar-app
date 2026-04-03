@@ -11,10 +11,9 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET ID (RECHTSTREEKSE EXPORT)
+# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
 SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
-# We gebruiken nu de meest directe link die Google toestaat
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=150651261"
+CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -65,11 +64,10 @@ st.divider()
 # --- GRAFIEK SECTIE (STABIEL) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We lezen de data direct van de web-link (CSV)
+    # We downloaden de CSV en negeren de kolomnamen
     df = pd.read_csv(CSV_URL)
     if not df.empty:
-        # We maken een schone tabel: 1e kolom als Dag, laatste als Watt
-        # We dwingen de cijfers om echte getallen te zijn (.to_numeric)
+        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
@@ -77,7 +75,7 @@ try:
         # Teken de balkjes
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
-        st.info("Vul een datum en piek in je Google Sheet in.")
+        st.info("Nog geen data gevonden in de sheet.")
 except Exception as e:
     st.info("Grafiek laden...")
 

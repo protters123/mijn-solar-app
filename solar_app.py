@@ -36,7 +36,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Update records in geheugen
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -62,25 +62,24 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK SECTIE (FIXED) ---
+# --- GRAFIEK SECTIE (STABIEL) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We lezen de data direct van de export link
-    df_raw = pd.read_csv(CSV_URL)
-    if not df_raw.empty:
-        # We pakken alleen de eerste en de laatste kolom
-        # We dwingen 'Dag' naar tekst en 'Piek' naar getallen
-        df_chart = pd.DataFrame({
-            'Dag': df_raw.iloc[:, 0].astype(str),
-            'Watt': pd.to_numeric(df_raw.iloc[:, -1], errors='coerce')
+    # We lezen de data direct van de web-link (CSV)
+    df = pd.read_csv(CSV_URL)
+    if not df.empty:
+        # We maken een schone tabel: 1e kolom als Dag, laatste als Watt
+        # We dwingen de cijfers om echte getallen te zijn (.to_numeric)
+        chart_data = pd.DataFrame({
+            'Dag': df.iloc[:, 0].astype(str),
+            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
         }).dropna()
-        
-        # We tekenen eindelijk de balkjes!
-        st.bar_chart(data=df_chart, x='Dag', y='Watt')
+        # Teken de balkjes
+        st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
         st.info("Vul een datum en piek in je Google Sheet in.")
-except Exception:
-    st.caption("Verbinding maken met Google Sheets...")
+except Exception as e:
+    st.info("Grafiek laden...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

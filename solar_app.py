@@ -5,15 +5,14 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE GRAFIEK FIX
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW NIEUWE GEPUBLICEERDE LINK (CSV FORMAT)
-SHEET_ID = "2PACX-1vTZcT5oWna6hU_PI7awD7tuL6OiMLxAuUNTuBEXqZZo_IPTmRYuOp39HXuvcIyl0Kxyk7rArpdhaKhn"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/e/{SHEET_ID}/pub?gid=150651261&single=true&output=csv"
+# JOUW GEPUBLICEERDE CSV LINK
+SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -35,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records in geheugen
+# Update records
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -61,20 +60,22 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK SECTIE ---
+# --- GRAFIEK SECTIE (ULTRA SIMPEL) ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We lezen de data in via je nieuwe publieke link
-    df = pd.read_csv(CSV_URL)
+    # We downloaden de CSV en negeren alle headers
+    df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We maken de kolomnamen schoon
-        df.columns = [str(c).strip() for c in df.columns]
-        # X-as is de eerste kolom (Datum), Y-as is de laatste (Totaal)
-        st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
+        # We pakken de eerste kolom als X en de laatste als Y
+        chart_data = pd.DataFrame({
+            'Datum': df.iloc[:, 0].astype(str),
+            'Piek': df.iloc[:, -1].astype(float)
+        })
+        st.bar_chart(data=chart_data, x='Datum', y='Piek')
     else:
-        st.info("Nog geen data in de Google Sheet gevonden.")
+        st.info("Nog geen data gevonden in de sheet.")
 except Exception as e:
-    st.info("De grafiek wordt geladen... (Check of er data in het tabblad 'Historiek' staat)")
+    st.info("De grafiek verschijnt zodra er data in het tabblad 'Historiek' staat.")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
 time.sleep(2)

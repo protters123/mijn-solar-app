@@ -8,7 +8,7 @@ from datetime import datetime
 # ==========================================
 # DENNIS SOLAR PIEK - CLOUD DATABASE VERSIE
 # ==========================================
-PUBLIEK_IP = "162.120.187.55"
+PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 

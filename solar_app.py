@@ -1,17 +1,20 @@
 import streamlit as st
 import requests
 import time
-from datetime import datetime
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - SIMPELE GRAFIEK FIX
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-SHEET_URL = "https://google.com"
+
+# JOUW GOOGLE SHEET EXPORT LINK
+# Deze link zet je Sheet direct om in data die de app begrijpt
+SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -20,9 +23,6 @@ if 'p_total' not in st.session_state:
     st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
     st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
     st.session_state.p_total = st.secrets.get("totaal_piek", 3717.0)
-
-# Verbinding maken
-conn = st.connection("gsheets", type=GSheetsConnection)
 
 def fetch_status(url):
     try:
@@ -35,7 +35,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Update records in geheugen
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -61,20 +61,17 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK SECTIE (VERSIMPELD) ---
-st.subheader("📅 Maandoverzicht Hoogste Pieken")
+# --- GRAFIEK SECTIE ---
+st.subheader("📅 Maandoverzicht")
 try:
-    # We lezen simpelweg de hele sheet in
-    df = conn.read(spreadsheet=SHEET_URL, ttl=0)
+    # We lezen de data direct in via de CSV link
+    df = pd.read_csv(CSV_URL)
     if not df.empty:
-        # We pakken de eerste en laatste kolom voor de balkjes
-        chart_data = df.iloc[:, [0, -1]]
-        chart_data.columns = ['Datum', 'Piek']
-        st.bar_chart(data=chart_data, x='Datum', y='Piek')
-    else:
-        st.info("Nog geen data in de Google Sheet gevonden.")
-except Exception as e:
-    st.caption("Verbinding maken met Google Sheets...")
+        # We pakken de eerste kolom (Datum) en de laatste (Piek_Totaal)
+        df.columns = [c.strip() for c in df.columns]
+        st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
+except:
+    st.info("Grafiek wordt geladen zodra er data in de Google Sheet staat.")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

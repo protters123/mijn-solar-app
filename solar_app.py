@@ -5,14 +5,15 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE ECHTE FIX 💚
+# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK (EINDELIJK DE GOEDE!)
+# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD NAAR CSV OUTPUT)
 SHEET_URL = "https://google.com"
+
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
 # --- RECORDS UIT SECRETS ---
@@ -69,9 +70,9 @@ try:
         df.columns = [c.strip() for c in df.columns]
         # We dwingen de laatste kolom naar een getal
         df.iloc[:, -1] = pd.to_numeric(df.iloc[:, -1], errors='coerce')
-        # Teken de grafiek
+        # Teken de grafiek: X-as is de eerste kolom (Datum), Y-as is de laatste (Totaal)
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
-except Exception:
+except Exception as e:
     st.info("Wacht op data uit Google Sheets...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")

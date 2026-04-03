@@ -8,10 +8,13 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# 1. Configuur de Google Sheet link (ID uit jouw screenshot)
+# 1. Je ID en Tabblad
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-SHEET_NAME = "Historiek"  # Naam onderaan je tabblad
-CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
+SHEET_NAME = "Historiek"
+
+# 2. De export URL handmatig samenstellen
+CSV_URL = "https://google.com" + SHEET_ID + "/gviz/tq?tqx=out:csv&sheet=" + SHEET_NAME
+
 
 # 2. Inverter Gegevens
 PUBLIEK_IP = "94.110.235.108" 

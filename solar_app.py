@@ -9,7 +9,7 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE TABEL FIX ☀️
 # ==========================================
 
-# 1. DE LINK (Directe CSV export van je sheet)
+# 1. DE LINK (Directe CSV link van jouw sheet)
 CSV_URL = "https://google.com"
 
 # 2. INVERTER IP'S
@@ -70,20 +70,17 @@ try:
     # We voegen een random getal toe om caching te voorkomen
     fresh_url = f"{CSV_URL}&cache={random.randint(1, 100000)}"
     
-    # We laden de data zonder koppen te forceren (skiprows=0)
+    # We laden de data met automatische kolomherkenning
     df = pd.read_csv(fresh_url)
     
     if not df.empty:
-        # We hernoemen de kolommen handmatig zodat het altijd klopt
-        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
-        
-        # Laatste dag bovenaan tonen
+        # We maken de tabel schoon voor Streamlit
+        # We tonen de data direct, met de nieuwste rijen boven
         st.table(df.iloc[::-1])
     else:
         st.info("De spreadsheet is leeg.")
 except Exception as e:
     st.warning("Data wordt geladen...")
-    # st.write(e) # Haal het hekje weg als je de exacte fout wilt zien
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

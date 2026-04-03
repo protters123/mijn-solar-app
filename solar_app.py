@@ -5,16 +5,15 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE FIX
+# SOLAR PIEK PRO - FINALE GRAFIEK FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET ID EN DE JUISTE DATA LINK
-SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
-# Let op: de link hieronder is nu hersteld naar docs.google.com
-CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
+# JOUW NIEUWE GEPUBLICEERDE LINK (CSV FORMAT)
+SHEET_ID = "2PACX-1vTZcT5oWna6hU_PI7awD7tuL6OiMLxAuUNTuBEXqZZo_IPTmRYuOp39HXuvcIyl0Kxyk7rArpdhaKhn"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/e/{SHEET_ID}/pub?gid=150651261&single=true&output=csv"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -65,7 +64,7 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We lezen de data in via de gecorrigeerde link
+    # We lezen de data in via je nieuwe publieke link
     df = pd.read_csv(CSV_URL)
     if not df.empty:
         # We maken de kolomnamen schoon
@@ -75,8 +74,8 @@ try:
     else:
         st.info("Nog geen data in de Google Sheet gevonden.")
 except Exception as e:
-    st.info("Zorg dat je de sheet hebt 'Gepubliceerd op internet' via het menu Bestand.")
+    st.info("De grafiek wordt geladen... (Check of er data in het tabblad 'Historiek' staat)")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
 time.sleep(2)
 st.rerun()

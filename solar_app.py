@@ -11,10 +11,9 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET EXPORT LINK
-# Deze link zet je Sheet direct om in data die de app begrijpt
+# JOUW GOOGLE SHEET ID
 SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
+CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -27,10 +26,11 @@ if 'p_total' not in st.session_state:
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
-        return abs(float(r['active_power_w'])), "🟢"
+        val = abs(float(r['active_power_w']))
+        return val, "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA ---
+# --- LIVE DATA ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
@@ -64,13 +64,14 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We lezen de data direct in via de CSV link
+    # We lezen de data in en dwingen Python om de kolommen goed te zetten
     df = pd.read_csv(CSV_URL)
     if not df.empty:
         # We pakken de eerste kolom (Datum) en de laatste (Piek_Totaal)
-        df.columns = [c.strip() for c in df.columns]
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
-except:
+    else:
+        st.info("Nog geen data in de Google Sheet gevonden.")
+except Exception as e:
     st.info("Grafiek wordt geladen zodra er data in de Google Sheet staat.")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")

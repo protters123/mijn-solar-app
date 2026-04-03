@@ -9,7 +9,7 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# 1. DE ENIGE CORRECTE LINK (Zonder google.com ervoor!)
+# 1. DE ENIGE CORRECTE LINK (Nu met docs.google.com en de /d/ map)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
 
@@ -78,8 +78,8 @@ try:
         
         if not df.empty:
             # We pakken de eerste 4 kolommen (Datum, Symo, Galvo, Totaal)
+            # Dit voorkomt dat we rommel van andere kolommen inladen
             clean_df = df.iloc[:, :4]
-            # We hernoemen ze voor een strakke look
             clean_df.columns = ['Datum', 'Symo (W)', 'Galvo (W)', 'Totaal (W)']
             
             # Tabel tonen met de nieuwste dag bovenaan
@@ -87,10 +87,10 @@ try:
         else:
             st.info("De spreadsheet is momenteel leeg.")
     else:
-        st.error("Kan geen verbinding maken met Google. Check je internet.")
+        st.error("Kan geen verbinding maken met de spreadsheet. Controleer of de sheet 'Iedereen met de link' mag lezen.")
 
-except Exception:
-    st.warning("Data van Google Sheets wordt geladen...")
+except Exception as e:
+    st.warning("Wacht op geldige data van de spreadsheet...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 

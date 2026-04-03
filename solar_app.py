@@ -6,37 +6,36 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # ==========================================
-# SOLAR PIEK PRO - HISTORIEK FIX
+# SOLAR PIEK PRO - FINALE VERSIE
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-
-# JOUW GOOGLE SHEET LINK
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- RECORDS LADEN ---
-if 'p_symo' not in st.session_state:
-    st.session_state.p_symo = st.secrets.get("symo_piek", 3740.0)
-    st.session_state.p_galvo = st.secrets.get("galvo_piek", 0.0)
-    st.session_state.p_total = st.secrets.get("totaal_piek", 3740.0)
+# --- RECORDS UIT SECRETS ---
+if 'p_total' not in st.session_state:
+    st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
+    st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
+    st.session_state.p_total = st.secrets.get("totaal_piek", 3717.0)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
-        return abs(float(r['active_power_w'])), "🟢"
+        val = abs(float(r['active_power_w']))
+        return val, "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA ---
+# --- LIVE DATA ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Records updaten
+# Update records in het geheugen van de app
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -45,31 +44,39 @@ if val_t > st.session_state.p_total:
 
 # --- DISPLAY ---
 st.title("☀️ Solar Piek Pro")
-st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W", delta=f"{val_t - st.session_state.p_total:,.0f} W")
-
-c1, c2 = st.columns(2)
-with c1:
-    st.subheader(f"{icon_s} Symo")
-    st.metric("Nu", f"{val_s:,.0f} W")
-with c2:
-    st.subheader(f"{icon_g} Galvo")
-    st.metric("Nu", f"{val_g:,.0f} W")
+st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
+st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
 st.divider()
 
-# --- MAANDOVERZICHT ---
-st.subheader("📅 Maandoverzicht")
+c1, c2 = st.columns(2)
+with c1:
+    st.markdown(f"### {icon_s} Symo")
+    st.metric("Nu", f"{val_s:,.0f} W")
+    st.caption(f"Record: {st.session_state.p_symo} W")
+with c2:
+    st.markdown(f"### {icon_g} Galvo")
+    st.metric("Nu", f"{val_g:,.0f} W")
+    st.caption(f"Record: {st.session_state.p_galvo} W")
+
+st.divider()
+
+# --- HISTORIEK GRAFIEK ---
+st.subheader("📅 Maandoverzicht Hoogste Pieken")
 try:
     df_hist = conn.read(spreadsheet=SHEET_URL, worksheet="Historiek", ttl=0)
     if not df_hist.empty:
-        # We pakken de kolom met de datum en de laatste kolom voor de grafiek
+        # We maken de kolomnamen schoon (verwijderen eventuele extra spaties)
+        df_hist.columns = [c.strip().replace(' ', '_') for c in df_hist.columns]
+        # We zetten de datum om naar een leesbaar formaat
         df_hist['Datum'] = pd.to_datetime(df_hist['Datum']).dt.date
+        # We pakken de laatste kolom (Totaal) voor de grafiek
         st.bar_chart(data=df_hist, x='Datum', y=df_hist.columns[-1])
     else:
-        st.info("Vul een datum en piek in het tabblad 'Historiek' in.")
-except Exception:
-    st.caption("Wacht op data in Google Sheets...")
+        st.info("Vul een datum en piek in het tabblad 'Historiek' in Google Sheets.")
+except:
+    st.caption("Grafiek laden... Vul de kolommen in Google Sheets correct in.")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')}")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
 time.sleep(2)
 st.rerun()

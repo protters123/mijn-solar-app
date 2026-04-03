@@ -6,13 +6,13 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # ==========================================
-# SOLAR PIEK PRO - STATUS & HISTORIEK
+# SOLAR PIEK PRO - FIX DATUM & LINK
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW CORRECTE GOOGLE SHEET LINK
+# DE CORRECTE LINK NAAR JOUW GOOGLE SHEET
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -30,9 +30,9 @@ def fetch_data_with_status(url):
     try:
         res = requests.get(url, timeout=2).json()
         val = abs(float(res['active_power_w']))
-        return val, "🟢" # Groen bolletje voor Online
+        return val, "🟢"
     except:
-        return 0.0, "🔴" # Rood bolletje voor Offline
+        return 0.0, "🔴"
 
 # --- DATA OPHALEN ---
 val_s, icon_s = fetch_data_with_status(URL_1)
@@ -55,7 +55,7 @@ st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
 st.divider()
 
-# Individuele status met bolletjes
+# Individuele status
 c1, c2 = st.columns(2)
 with c1:
     st.subheader(f"{icon_s} Symo")
@@ -69,19 +69,22 @@ with c2:
 
 st.divider()
 
-# --- MAANDOVERZICHT ---
+# --- MAANDOVERZICHT (FIXED) ---
 st.subheader("📅 Maandoverzicht Hoogste Pieken")
 try:
-    # We lezen alleen als de link correct is
-    if "docs.google.com" in SHEET_URL:
-        df_hist = conn.read(spreadsheet=SHEET_URL, worksheet="Historiek", ttl=0)
-        if not df_hist.empty:
-            st.bar_chart(df_hist.set_index("Datum")["Piek_Totaal"])
-        else:
-            st.info("Nog geen data in tabblad 'Historiek' gevonden.")
-except Exception:
-    st.caption("Grafiek tijdelijk niet beschikbaar.")
+    # Lees het tabblad 'Historiek'
+    df_hist = conn.read(spreadsheet=SHEET_URL, worksheet="Historiek", ttl=0)
+    
+    if not df_hist.empty:
+        # Zorg dat Python de kolom 'Datum' echt als datum ziet
+        df_hist['Datum'] = pd.to_datetime(df_hist['Datum']).dt.strftime('%d-%m')
+        # Teken de grafiek met de juiste datums op de as
+        st.bar_chart(df_hist.set_index("Datum")["Piek_Totaal"])
+    else:
+        st.info("Nog geen data in tabblad 'Historiek' gevonden.")
+except Exception as e:
+    st.caption("Grafiek laden... Vul het tabblad 'Historiek' in Google Sheets.")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Geheugen: Cloud Secrets")
 time.sleep(2)
 st.rerun()

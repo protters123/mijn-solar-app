@@ -6,13 +6,12 @@ import io
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - GEOPTIMALISEERDE VERSIE ☀️
+# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️
 # ==========================================
 
-# CONFIGURATIE
+# CONFIGURATIE (Geverifieerd met jouw screenshot)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# DE CORRECTE URL VOOR GOOGLE SHEETS CSV EXPORT:
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
 # INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
@@ -37,21 +36,17 @@ def fetch_status(url):
     except Exception:
         return 0.0, "🔴"
 
-@st.cache_data(ttl=60) # Cache de spreadsheet voor 60 seconden om verbanning te voorkomen
+@st.cache_data(ttl=60) # Cache de spreadsheet voor 60 seconden
 def get_table_data(url):
     """Haalt de geschiedenis op uit Google Sheets."""
     try:
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             df = pd.read_csv(io.StringIO(response.text))
-            # Selecteer eerste 4 kolommen: Datum, Symo, Galvo, Totaal
-            clean_df = pd.DataFrame({
-                'Datum': df.iloc[:, 0].astype(str),
-                'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
-                'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
-                'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
-            }).dropna(subset=['Datum'])
-            return clean_df.iloc[::-1] # Nieuwste bovenaan
+            # Hernoem kolommen op basis van positie uit je screenshot
+            df.columns = ['Datum', 'Symo (W)', 'Galvo (W)', 'Totaal (W)']
+            df = df.dropna(subset=['Datum'])
+            return df.iloc[::-1] # Nieuwste bovenaan
     except Exception:
         return None
     return None
@@ -61,12 +56,12 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records en vier feest bij nieuw record
+# Update records in geheugen
 if val_s > st.session_state.p_symo_rec: st.session_state.p_symo_rec = val_s
 if val_g > st.session_state.p_galvo_rec: st.session_state.p_galvo_rec = val_g
 if val_t > st.session_state.p_total_rec: 
     st.session_state.p_total_rec = val_t
-    st.balloons()
+    st.balloons() # Feestje bij een nieuw record!
 
 # --- DASHBOARD UI ---
 st.title("☀️ Solar Piek Pro") 
@@ -93,9 +88,10 @@ st.subheader("💚 Maandoverzicht")
 history_df = get_table_data(CSV_URL)
 
 if history_df is not None and not history_df.empty:
-    st.table(history_df.head(10)) # Toon de laatste 10 metingen
+    # Stijlvolle weergave van de tabel
+    st.dataframe(history_df, use_container_width=True, hide_index=True)
 else:
-    st.info("Wachten op verbinding met Google Sheets...")
+    st.warning("⚠️ Geen data gevonden. Controleer of de sheet 'Gepubliceerd op internet' is.")
 
 st.caption(f"Laatste update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

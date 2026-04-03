@@ -9,11 +9,11 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# 1. DE ENIGE CORRECTE LINK (Nu met docs.google.com en de /d/ map)
+# DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
 
-# 2. INVERTER GEGEVENS
+# INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
@@ -31,8 +31,7 @@ def fetch_status(url):
         r = requests.get(url, timeout=2).json()
         val = abs(float(r['active_power_w']))
         return val, "🟢"
-    except: 
-        return 0.0, "🔴"
+    except: return 0.0, "🔴"
 
 # --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
@@ -69,31 +68,30 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # We halen de data op als ruwe tekst
+    # Ophalen van data
     response = requests.get(CSV_URL, timeout=5)
     
     if response.status_code == 200:
-        # We zetten de tekst om naar een tabel
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # We pakken de eerste 4 kolommen (Datum, Symo, Galvo, Totaal)
-            # Dit voorkomt dat we rommel van andere kolommen inladen
-            clean_df = df.iloc[:, :4]
-            clean_df.columns = ['Datum', 'Symo (W)', 'Galvo (W)', 'Totaal (W)']
+            # We pakken de eerste 4 kolommen op positie: 0=Datum, 1=Symo, 2=Galvo, 3=Totaal
+            table_df = pd.DataFrame({
+                'Datum': df.iloc[:, 0].astype(str),
+                'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+                'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+                'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
+            }).dropna(subset=['Datum'])
             
-            # Tabel tonen met de nieuwste dag bovenaan
-            st.table(clean_df.iloc[::-1])
+            # Sorteer: Nieuwste dag bovenaan
+            st.table(table_df.iloc[::-1])
         else:
             st.info("De spreadsheet is momenteel leeg.")
-    else:
-        st.error("Kan geen verbinding maken met de spreadsheet. Controleer of de sheet 'Iedereen met de link' mag lezen.")
-
-except Exception as e:
+except Exception:
     st.warning("Wacht op geldige data van de spreadsheet...")
 
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 
-# Automatische verversing
+# Refresh pagina
 time.sleep(2)
 st.rerun()

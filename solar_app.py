@@ -5,13 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE FIX 💚
+# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE LINK (RECHTSTREEKS NAAR DE DATA)
+# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -34,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Update records in geheugen
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -60,10 +60,10 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (MAANDOVERZICHT) ---
+# --- GRAFIEK (GEFORCEERD) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We laden de data via de CSV link
+    # We downloaden de CSV data via de gecorrigeerde link
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
         # We maken de kolomnamen schoon
@@ -72,9 +72,11 @@ try:
         df.iloc[:, -1] = pd.to_numeric(df.iloc[:, -1], errors='coerce')
         # Teken de grafiek: X-as is de eerste kolom (Datum), Y-as is de laatste (Totaal)
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
-except Exception:
+    else:
+        st.info("Nog geen data gevonden in de sheet.")
+except Exception as e:
     st.info("De grafiek verschijnt zodra de data uit Google Sheets binnenkomt.")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)
 st.rerun()

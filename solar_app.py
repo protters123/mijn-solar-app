@@ -66,22 +66,21 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # We lezen de data direct van je link
+    # Forceer pandas om de link telkens vers te laden
     df = pd.read_csv(CSV_URL)
     
     if not df.empty:
-        # We pakken de 1e kolom (Datum) en de laatste kolom (Totaal) op basis van positie
-        chart_df = pd.DataFrame({
-            'Dag': df.iloc[:, 0].astype(str),
-            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
-        }).dropna()
+        # We pakken de 1e kolom (Datum) en de laatste (Totaal)
+        chart_data = df.iloc[:, [0, -1]] 
+        chart_data.columns = ['Dag', 'Watt']
         
-        # Teken de grafiek met groene balkjes (#2ecc71)
-        st.bar_chart(data=chart_df, x='Dag', y='Watt', color="#2ecc71")
+        # Teken de grafiek met groene balkjes
+        st.bar_chart(data=chart_data, x='Dag', y='Watt', color="#2ecc71")
     else:
         st.info("De spreadsheet is leeg.")
 except Exception as e:
     st.error(f"Fout bij laden: {e}")
+
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 

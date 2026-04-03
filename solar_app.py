@@ -66,27 +66,24 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # We lezen de data direct van je link
     df = pd.read_csv(CSV_URL)
     
     if not df.empty:
-        # We pakken de 1e kolom (Datum) en de laatste (Totaal van Symo+Galvo)
+        # We maken de tabel precies zoals in je screenshot: Datum, Symo, Galvo, Totaal
         table_df = pd.DataFrame({
-            'Datum': df.iloc[:, 0].astype(str),
-            'Piek (W)': pd.to_numeric(df.iloc[:, -1], errors='coerce')
-        }).dropna()
+            'Datum': df['Datum'].astype(str),
+            'Symo (W)': df['Symo'],
+            'Galvo (W)': df['Galvo'],
+            'Totaal (W)': df['Totaal']
+        }).dropna(how='all') # Verwijdert lege rijen
         
-        # Sorteer op datum (nieuwste bovenaan)
-        table_df = table_df.iloc[::-1]
-
-        # De tabel tonen
-        # Gebruik st.table voor een vaste tabel of st.dataframe voor een interactieve
-        st.table(table_df)
-        
+        # Sorteer: Nieuwste dag bovenaan
+        st.table(table_df.iloc[::-1])
     else:
-        st.info("De spreadsheet is leeg.")
+        st.info("Nog geen historische data gevonden.")
 except Exception as e:
-    st.error(f"Fout bij laden: {e}")
+    st.error(f"Fout bij laden tabel: {e}")
+
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 

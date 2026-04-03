@@ -5,22 +5,22 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - VOLLEDIG WERKEND ☀️
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# 1. Google Sheet Configuratie (Gecorrigeerd op basis van je afbeelding)
+# 1. Configuur de Google Sheet link (ID uit jouw screenshot)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-SHEET_NAME = "Historiek"  # Dit was de boosdoener!
+SHEET_NAME = "Historiek"  # Naam onderaan je tabblad
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
 
-# 2. Inverter IPs
+# 2. Inverter Gegevens
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- Records laden ---
+# --- Records initialiseren ---
 if 'p_total' not in st.session_state:
     st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
     st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
@@ -42,32 +42,35 @@ if val_t > st.session_state.p_total:
     st.session_state.p_total = val_t
     st.balloons()
 
-# --- Display ---
+# --- Dashboard ---
 st.title("💚 Solar Piek Pro")
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
 st.divider()
 
-# --- Grafiek Sectie ---
-st.subheader("📊 Historiek Overzicht")
+# --- De Grafiek Sectie ---
+st.subheader("📊 Maandoverzicht")
 try:
-    # We lezen de CSV in
+    # Data ophalen uit de sheet
     df = pd.read_csv(CSV_URL)
     
-    if not df.empty:
-        # We koppelen de kolommen 'Datum' en 'Totaal' uit jouw screenshot
-        chart_data = pd.DataFrame({
+    # We koppelen exact de kolomnamen uit jouw screenshot: 'Datum' en 'Totaal'
+    if 'Datum' in df.columns and 'Totaal' in df.columns:
+        chart_df = pd.DataFrame({
             'Dag': df['Datum'].astype(str),
             'Watt': pd.to_numeric(df['Totaal'], errors='coerce')
         }).dropna()
         
-        st.bar_chart(data=chart_data, x='Dag', y='Watt')
+        # Teken de grafiek
+        st.bar_chart(data=chart_df, x='Dag', y='Watt')
     else:
-        st.info("De sheet is leeg.")
+        st.warning(f"Kolommen niet gevonden. Gevonden in sheet: {df.columns.tolist()}")
 except Exception as e:
-    st.error(f"Kan sheet niet laden. Check of 'Delen' op 'Iedereen met de link' staat.")
+    st.error(f"Fout bij laden: {e}")
 
-st.caption(f"Laatste update: {datetime.now().strftime('%H:%M:%S')}")
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+
+# Refresh de pagina
 time.sleep(2)
 st.rerun()

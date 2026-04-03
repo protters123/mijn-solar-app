@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX 💚
+# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -66,7 +66,8 @@ try:
     # We downloaden de data
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We pakken gewoon de eerste en laatste kolom, wat de namen ook zijn
+        # We negeren de namen en pakken gewoon kolom 1 en kolom 4
+        # We dwingen de cijfers om echte getallen te zijn
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')

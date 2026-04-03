@@ -6,10 +6,10 @@ import random
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE FORCEER-CACHE-FIX ☀️
+# SOLAR PIEK PRO - DE DEFINITIEVE TABEL ☀️
 # ==========================================
 
-# JOUW DIRECTE CSV LINK
+# DE DIRECTE CSV LINK
 BASE_URL = "https://google.com"
 
 # INVERTER GEGEVENS
@@ -56,40 +56,39 @@ c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.caption(f"Hoogste vandaag: {st.session_state.p_symo:,.0f} W")
+    st.caption(f"Piek vandaag: {st.session_state.p_symo:,.0f} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.caption(f"Hoogste vandaag: {st.session_state.p_galvo:,.0f} W")
+    st.caption(f"Piek vandaag: {st.session_state.p_galvo:,.0f} W")
 
 st.divider()
 
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # TRUC: Voeg een willekeurig nummer toe aan de URL zodat Google/Streamlit niet de oude versie pakt
+    # Forceer verse data van Google
     csv_url_fresh = f"{BASE_URL}&cache_bust={random.randint(1, 100000)}"
-    
     df = pd.read_csv(csv_url_fresh)
     
-    if not df.empty and len(df.columns) >= 4:
-        # Maak de tabel op basis van positie
+    if not df.empty:
+        # We bouwen de tabel op basis van de eerste 4 kolommen uit je screenshot
         table_df = pd.DataFrame({
             'Datum': df.iloc[:, 0].astype(str),
-            'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
-            'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
-            'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
-        }).dropna(subset=['Datum']) # Alleen rijen met een datum
+            'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce').fillna(0),
+            'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0),
+            'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce').fillna(0)
+        })
         
-        # Laatste dag bovenaan
+        # Laatste dag bovenaan tonen
         st.dataframe(table_df.iloc[::-1], use_container_width=True, hide_index=True)
     else:
-        st.info("Bezig met ophalen van data uit de cloud...")
-except Exception as e:
-    st.warning("De tabel wordt geladen zodra er data in je Google Sheet staat.")
+        st.info("De spreadsheet is leeg.")
+except Exception:
+    st.warning("De tabel wordt geladen zodra de data van Google Sheets beschikbaar is.")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 
-# Ververs pagina
+# Refresh pagina
 time.sleep(2)
 st.rerun()

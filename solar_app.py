@@ -6,7 +6,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # ==========================================
-# SOLAR PIEK PRO - AUTOMATISCHE GRAFIEK FIX
+# SOLAR PIEK PRO - SIMPELE GRAFIEK FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -21,16 +21,16 @@ if 'p_total' not in st.session_state:
     st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
     st.session_state.p_total = st.secrets.get("totaal_piek", 3717.0)
 
+# Verbinding maken
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
-        val = abs(float(r['active_power_w']))
-        return val, "🟢"
+        return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA ---
+# --- DATA ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
@@ -61,21 +61,18 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK SECTIE ---
+# --- GRAFIEK SECTIE (VERSIMPELD) ---
 st.subheader("📅 Maandoverzicht Hoogste Pieken")
 try:
-    # We proberen de data te lezen (zonder specifiek blad te noemen voor meer succes)
-    df_hist = conn.read(spreadsheet=SHEET_URL, ttl=0)
-    
-    if not df_hist.empty:
-        # We maken de kolomnamen schoon
-        df_hist.columns = [str(c).strip() for c in df_hist.columns]
-        # We zetten de eerste kolom om naar datum
-        df_hist.iloc[:, 0] = pd.to_datetime(df_hist.iloc[:, 0]).dt.date
-        # We tekenen de grafiek: X-as is de eerste kolom, Y-as is de laatste kolom
-        st.bar_chart(data=df_hist, x=df_hist.columns[0], y=df_hist.columns[-1])
+    # We lezen simpelweg de hele sheet in
+    df = conn.read(spreadsheet=SHEET_URL, ttl=0)
+    if not df.empty:
+        # We pakken de eerste en laatste kolom voor de balkjes
+        chart_data = df.iloc[:, [0, -1]]
+        chart_data.columns = ['Datum', 'Piek']
+        st.bar_chart(data=chart_data, x='Datum', y='Piek')
     else:
-        st.info("Vul data in onder de titels in Google Sheets.")
+        st.info("Nog geen data in de Google Sheet gevonden.")
 except Exception as e:
     st.caption("Verbinding maken met Google Sheets...")
 

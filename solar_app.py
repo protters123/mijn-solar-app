@@ -11,12 +11,14 @@ from datetime import datetime
 # 1. Google Sheet Configuratie (GEFIXTE URL)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 SHEET_NAME = "Historiek" 
-CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
+
+# DIT IS DE CORRECTE LINK (Vervangt de google.com link volledig)
+CSV_URL = "https://google.com" + SHEET_ID + "/gviz/tq?tqx=out:csv&sheet=" + SHEET_NAME
 
 # 2. Inverter Gegevens
 PUBLIEK_IP = "94.110.235.108" 
-URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
-URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
+URL_1 = "http://" + PUBLIEK_IP + ":8081/api/v1/data"
+URL_2 = "http://" + PUBLIEK_IP + ":8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
@@ -65,19 +67,18 @@ try:
     # Data ophalen uit de sheet via de correcte CSV_URL
     df = pd.read_csv(CSV_URL)
     
-    # We gebruiken de kolomnamen 'Datum' en 'Totaal' uit jouw screenshot
+    # We gebruiken de kolomnamen 'Datum' en 'Totaal' uit jouw spreadsheet
     if 'Datum' in df.columns and 'Totaal' in df.columns:
         chart_df = pd.DataFrame({
             'Dag': df['Datum'].astype(str),
             'Watt': pd.to_numeric(df['Totaal'], errors='coerce')
         }).dropna()
         
-        # De balkgrafiek tekenen
         st.bar_chart(data=chart_df, x='Dag', y='Watt')
     else:
-        st.warning(f"Kolommen niet gevonden. Ik zie wel: {df.columns.tolist()}")
+        st.warning("Kolommen 'Datum' of 'Totaal' niet gevonden.")
 except Exception as e:
-    st.error(f"Kan geen verbinding maken met de sheet: {e}")
+    st.error(f"Fout bij verbinden: {e}")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 

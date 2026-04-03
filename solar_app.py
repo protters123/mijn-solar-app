@@ -70,12 +70,12 @@ try:
     # Ophalen van data met een korte timeout
     response = requests.get(CSV_URL, timeout=5)
     
-    # We controleren of de data echt tekst is en geen HTML-website
+    # Check of de data echt tekst is en geen HTML-website
     if response.status_code == 200 and not response.text.strip().lower().startswith("<!doctype html"):
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # We tonen de data direct, met de nieuwste rijen boven
+            # Sorteer nieuwste bovenaan
             st.dataframe(df.iloc[::-1], use_container_width=True, hide_index=True)
         else:
             st.info("De spreadsheet is momenteel leeg.")

@@ -9,7 +9,7 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# DIT IS DE ENIGE CORRECTE LINK OM JOUW DATA OP TE HALEN:
+# DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
 CSV_URL = "https://google.com"
 
 # INVERTER IP'S
@@ -70,20 +70,19 @@ try:
     # Ophalen van data
     response = requests.get(CSV_URL, timeout=5)
     
-    # We controleren of de data echt tekst is en geen website (HTML)
-    if response.status_code == 200 and not response.text.strip().startswith("<!doctype html>"):
+    # Check of de data echt tekst is en geen HTML-website
+    if response.status_code == 200 and not response.text.strip().lower().startswith("<!doctype html"):
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # We tonen de data direct, met de nieuwste rijen boven
-            # Gebruik st.dataframe voor de groene accenten van Streamlit
+            # Sorteer nieuwste bovenaan
             st.dataframe(df.iloc[::-1], use_container_width=True, hide_index=True)
         else:
-            st.info("De spreadsheet is leeg.")
+            st.info("De spreadsheet is momenteel leeg.")
     else:
-        st.error("Google stuurt nog steeds een website. Check of je sheet 'Gepubliceerd op internet' is als CSV.")
-except Exception:
-    st.warning("Aan het wachten op data...")
+        st.error("Google stuurt nog steeds een website. Zorg dat je sheet 'Gepubliceerd op internet' is als CSV.")
+except Exception as e:
+    st.warning(f"Data wordt geladen... ({e})")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

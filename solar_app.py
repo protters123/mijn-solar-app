@@ -34,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Records updaten
+# Update records
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -52,28 +52,28 @@ c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.caption(f"Piek: {st.session_state.p_symo} W")
+    st.caption(f"Record: {st.session_state.p_symo} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.caption(f"Piek: {st.session_state.p_galvo} W")
+    st.caption(f"Record: {st.session_state.p_galvo} W")
 
 st.divider()
 
 # --- GRAFIEK ---
 st.subheader("📅 Maandoverzicht")
 try:
+    # We downloaden de CSV en maken de kolomnamen schoon
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We maken de kolomnamen schoon van spaties
         df.columns = [c.strip() for c in df.columns]
-        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
-        # We zorgen dat de Piek-kolom echt als getal wordt gezien
+        # We dwingen de laatste kolom naar getallen
         df[df.columns[-1]] = pd.to_numeric(df[df.columns[-1]], errors='coerce')
+        # Datum kolom als X-as, Laatste kolom (Piek_Totaal) als Y-as
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
     else:
         st.info("Nog geen data gevonden in de sheet.")
-except Exception as e:
+except Exception:
     st.info("Grafiek laden...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")

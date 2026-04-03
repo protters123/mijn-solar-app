@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE FINITIEVE LOOK ☀️
+# SOLAR PIEK PRO - DE DEFINITIEVE LOOK ☀️
 # ==========================================
 
 # JOUW DIRECTE CSV LINK
@@ -44,7 +44,7 @@ if val_t > st.session_state.p_total:
     st.balloons()
 
 # --- DASHBOARD UI ---
-st.title("☀️ Solar Piek Pro") # De zon staat nu hier
+st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
@@ -55,24 +55,29 @@ c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_symo} W")
+    st.caption(f"Record: {st.session_state.p_symo:,.0f} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_galvo} W")
+    st.caption(f"Record: {st.session_state.p_galvo:,.0f} W")
 
 st.divider()
 
 # --- GRAFIEK SECTIE ---
-st.subheader("💚 Maandoverzicht") # Het groene hartje staat nu hier
+st.subheader("💚 Maandoverzicht") 
 try:
+    # We lezen de data direct van je link
     df = pd.read_csv(CSV_URL)
+    
     if not df.empty:
+        # We pakken de 1e kolom (Datum) en de laatste kolom (Totaal) op basis van positie
         chart_df = pd.DataFrame({
-            'Dag': df['Datum'].astype(str),
-            'Watt': pd.to_numeric(df['Totaal'], errors='coerce')
+            'Dag': df.iloc[:, 0].astype(str),
+            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
         }).dropna()
-        st.bar_chart(data=chart_df, x='Dag', y='Watt')
+        
+        # Teken de grafiek met groene balkjes (#2ecc71)
+        st.bar_chart(data=chart_df, x='Dag', y='Watt', color="#2ecc71")
     else:
         st.info("De spreadsheet is leeg.")
 except Exception as e:
@@ -80,6 +85,6 @@ except Exception as e:
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 
-# Refresh
+# Refresh de pagina elke 2 seconden
 time.sleep(2)
 st.rerun()

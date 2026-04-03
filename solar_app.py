@@ -5,13 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
+# SOLAR PIEK PRO - DE ECHTE FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
+# JOUW GEPUBLICEERDE CSV LINK (EINDELIJK DE GOEDE!)
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -34,7 +34,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records in geheugen
+# Update records
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -60,23 +60,21 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (GEFORCEERD) ---
+# --- GRAFIEK (MAANDOVERZICHT) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de CSV data via de gecorrigeerde link
+    # We laden de data via de CSV link
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
         # We maken de kolomnamen schoon
         df.columns = [c.strip() for c in df.columns]
-        # We dwingen de laatste kolom (Totaal) naar een getal voor de balkjes
+        # We dwingen de laatste kolom naar een getal
         df.iloc[:, -1] = pd.to_numeric(df.iloc[:, -1], errors='coerce')
-        # Teken de grafiek: X-as is de eerste kolom (Datum), Y-as is de laatste (Totaal)
+        # Teken de grafiek
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
-    else:
-        st.info("Nog geen data gevonden in de sheet.")
-except Exception as e:
-    st.info("De grafiek verschijnt zodra de data uit Google Sheets binnenkomt.")
+except Exception:
+    st.info("Wacht op data uit Google Sheets...")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
 time.sleep(2)
 st.rerun()

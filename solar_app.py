@@ -3,14 +3,15 @@ import requests
 import time
 import pandas as pd
 import io
+import random
 from datetime import datetime
 
 # ==========================================
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# DE ENIGE CORRECTE LINK VOOR JOUW DATA:
-CSV_URL = "https://google.com"
+# DE DIRECTE CSV LINK UIT JE SCREENSHOT
+BASE_CSV_URL = "https://google.com"
 
 # INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
@@ -67,22 +68,28 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # Ophalen van data met een korte timeout
-    response = requests.get(CSV_URL, timeout=5)
+    # Forceer verse data door een willekeurig getal aan de URL toe te voegen
+    csv_url = f"{BASE_CSV_URL}&cache={random.randint(1, 100000)}"
+    response = requests.get(csv_url, timeout=5)
     
-    # Check of de data echt tekst is en geen HTML-website
-    if response.status_code == 200 and not response.text.strip().lower().startswith("<!doctype html"):
+    if response.status_code == 200:
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # Sorteer nieuwste bovenaan
-            st.dataframe(df.iloc[::-1], use_container_width=True, hide_index=True)
+            # We maken de tabel exact zoals in je Google Sheet
+            table_df = pd.DataFrame({
+                'Datum': df['Datum'].astype(str),
+                'Symo (W)': pd.to_numeric(df['Symo'], errors='coerce'),
+                'Galvo (W)': pd.to_numeric(df['Galvo'], errors='coerce'),
+                'Totaal (W)': pd.to_numeric(df['Totaal'], errors='coerce')
+            }).dropna(subset=['Datum'])
+            
+            # Nieuwste dag bovenaan tonen
+            st.table(table_df.iloc[::-1])
         else:
             st.info("De spreadsheet is momenteel leeg.")
-    else:
-        st.error("Google geeft nog geen CSV-data vrij. Controleer de publicatie-instellingen.")
-except Exception as e:
-    st.warning(f"Data wordt geladen... ({e})")
+except Exception:
+    st.info("De tabel wordt geladen zodra Google de data vrijgeeft...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

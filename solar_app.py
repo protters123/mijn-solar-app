@@ -11,8 +11,6 @@ from datetime import datetime
 # 1. Google Sheet Configuratie (GEFIXTE URL)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 SHEET_NAME = "Historiek" 
-
-# DIT IS DE CORRECTE LINK (Vervangt de google.com link)
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
 
 # 2. Inverter Gegevens

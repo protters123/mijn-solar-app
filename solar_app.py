@@ -5,13 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE NIEUWE AANPAK 💚
+# SOLAR PIEK PRO - FINALE FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# We gebruiken de DIRECTE link naar je gepubliceerde data (CSV export)
+# JOUW GEPUBLICEERDE LINK (RECHTSTREEKS NAAR DE DATA)
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -60,13 +60,13 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (DE NIEUWE MANIER) ---
+# --- GRAFIEK (MAANDOVERZICHT) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We laden de data via de 'pub?output=csv' link
+    # We laden de data via de CSV link
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We maken de kolomnamen schoon van eventuele spaties
+        # We maken de kolomnamen schoon
         df.columns = [c.strip() for c in df.columns]
         # We dwingen de laatste kolom (Totaal) naar een getal voor de balkjes
         df.iloc[:, -1] = pd.to_numeric(df.iloc[:, -1], errors='coerce')

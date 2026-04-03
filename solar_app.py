@@ -8,11 +8,12 @@ from datetime import datetime
 # ==========================================
 # DENNIS SOLAR PIEK - CLOUD DATABASE VERSIE
 # ==========================================
-PUBLIEK_IP = "94.110.235.108"
+# CHECK DIT IP OP: whatsmyip.com (moet exact kloppen!)
+PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET LINK (NU CORRECT INGEVULD)
+# JOUW CORRECTE GOOGLE SHEET LINK
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
@@ -24,29 +25,31 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # --- FUNCTIE: RECORDS OPHALEN ---
 def get_peaks():
     try:
-        # Lees de data uit de sheet
         df = conn.read(spreadsheet=SHEET_URL, ttl=0)
-        s = float(df.iloc[0, 0]) # Symo_Piek (Kolom A)
-        g = float(df.iloc[0, 1]) # Galvo_Piek (Kolom B)
-        t = float(df.iloc[0, 2]) # Totaal_Piek (Kolom C)
+        # We pakken de eerste rij data (na de titels)
+        s = float(df.iloc[0, 0]) 
+        g = float(df.iloc[0, 1]) 
+        t = float(df.iloc[0, 2]) 
         return s, g, t
-    except Exception as e:
-        # Als de sheet leeg is of niet bereikbaar, gebruik deze startwaardes
+    except Exception:
+        # Startwaardes als de sheet nog leeg is
         return 3740.0, 0.0, 0.0
 
 # --- FUNCTIE: RECORDS OPSLAAN ---
 def save_peaks(s, g, t):
-    # Maak een tabelletje om terug te schrijven naar de eerste rij onder de titels
-    new_df = pd.DataFrame([[s, g, t]], columns=["Symo_Piek", "Galvo_Piek", "Totaal_Piek"])
-    conn.update(spreadsheet=SHEET_URL, data=new_df)
+    try:
+        new_df = pd.DataFrame([[s, g, t]], columns=["Symo_Piek", "Galvo_Piek", "Totaal_Piek"])
+        conn.update(spreadsheet=SHEET_URL, data=new_df)
+    except Exception:
+        st.error("Opslaan in Google Sheets mislukt!")
 
 # --- HOOFDPROGRAMMA ---
 p_symo, p_galvo, p_total = get_peaks()
 
 try:
-    # Live data ophalen van je beide meters thuis
-    res1 = requests.get(URL_1, timeout=2).json()
-    res2 = requests.get(URL_2, timeout=2).json()
+    # Live data ophalen van je beide meters thuis (timeout op 3 sec voor stabiliteit)
+    res1 = requests.get(URL_1, timeout=3).json()
+    res2 = requests.get(URL_2, timeout=3).json()
     
     val_symo = abs(float(res1['active_power_w']))
     val_galvo = abs(float(res2['active_power_w']))
@@ -58,9 +61,8 @@ try:
     if val_galvo > p_galvo: p_galvo = val_galvo; updated = True
     if val_total > p_total: 
         p_total = val_total; updated = True
-        st.balloons() # Feestje!
+        st.balloons()
     
-    # Sla alleen op in Google Sheets als er een NIEUW record is
     if updated:
         save_peaks(p_symo, p_galvo, p_total)
 
@@ -80,12 +82,13 @@ try:
         st.metric("Nu", f"{val_galvo:,.0f} W")
         st.metric("Piek", f"{p_galvo:,.0f} W")
 
-except Exception:
-    # Dit verschijnt als de meters thuis niet bereikbaar zijn (bijv. poort dicht of IP veranderd)
-    st.warning("Verbinden met meters thuis mislukt...")
-    st.info(f"Huidige records uit database: Symo {p_symo}W | Galvo {p_galvo}W")
+except Exception as e:
+    st.warning("⚠️ Verbinding met meters thuis mislukt...")
+    st.info(f"Check je IP ({PUBLIEK_IP}) en of poort 8081/8082 openstaan in je Orange modem.")
+    # Laat de records toch zien, ook als de live verbinding even weg is
+    st.metric("🏆 Hoogste Totaal (Record)", f"{p_total:,.0f} W")
 
-# Tijd & Refresh
+# Tijd & Refresh (2 sec is stabieler voor de cloud)
 st.caption(f"Laatste check: {datetime.now().strftime('%H:%M:%S')} | Gegevensbron: Google Sheets")
 time.sleep(2)
 st.rerun()

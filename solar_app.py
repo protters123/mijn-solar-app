@@ -72,7 +72,7 @@ with col2:
     st.metric(label="🏆 Hoogste Piek Ooit", value=f"{highest_peak:,.0f} W")
 
 # Tijdstip van laatste meting
-now = datetime.now().strftime("%H:%M:%S")
+now = datetime.now().strftime("%H:%M:%1")
 st.caption(f"Laatste update: {now} | Ververst elke 5 seconden")
 
 # Grafiek van de laatste metingen

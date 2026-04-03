@@ -35,7 +35,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Update records in geheugen
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -61,13 +61,13 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (MAANDOVERZICHT) ---
+# --- GRAFIEK (GEFORCEERD) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de data via de gecorrigeerde link
+    # We downloaden de CSV data via de gecorrigeerde link
     df = pd.read_csv(CSV_URL)
     if not df.empty:
-        # We pakken de eerste en laatste kolom
+        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
@@ -76,8 +76,8 @@ try:
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
         st.info("Nog geen data gevonden in de sheet.")
-except Exception:
-    st.info("Grafiek aan het laden...")
+except Exception as e:
+    st.info("Grafiek laden...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

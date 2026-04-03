@@ -5,13 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - NOOD-FIX GRAFIEK
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET LINK (DIRECTE CSV EXPORT)
+# JOUW GOOGLE SHEET ID EN CSV LINK
 SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
@@ -26,7 +26,8 @@ if 'p_total' not in st.session_state:
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
-        return abs(float(r['active_power_w'])), "🟢"
+        val = abs(float(r['active_power_w']))
+        return val, "🟢"
     except: return 0.0, "🔴"
 
 # --- LIVE DATA ---
@@ -34,7 +35,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Update records in geheugen
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -60,14 +61,17 @@ with c2:
 
 st.divider()
 
-# --- DE GRAFIEK ---
+# --- GRAFIEK SECTIE ---
 st.subheader("📅 Maandoverzicht")
 try:
+    # We lezen de data in en dwingen de kolomnamen goed te zetten
     df = pd.read_csv(CSV_URL)
     if not df.empty:
-        # Teken grafiek: Datum op X-as, Totaal op Y-as
-        st.bar_chart(data=df, x=df.columns[0], y=df.columns[3])
-except:
+        # X-as is de eerste kolom (Datum), Y-as is de laatste (Totaal)
+        st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
+    else:
+        st.info("Nog geen data in de Google Sheet gevonden.")
+except Exception:
     st.info("Zorg dat je de sheet hebt 'Gepubliceerd op internet' via het menu Bestand.")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")

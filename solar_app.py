@@ -11,12 +11,16 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET ID EN DE DIRECTE DATA LINK
+# JOUW GOOGLE SHEET CONFIGURATIE
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+SHEET_NAME = "Blad1"  # Pas dit aan als je tabblad een andere naam heeft
+CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
+
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
 # --- RECORDS UIT SECRETS ---
 if 'p_total' not in st.session_state:
+    # We laden veilige defaults als de secrets niet bestaan
     st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
     st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
     st.session_state.p_total = st.secrets.get("totaal_piek", 3717.0)
@@ -28,7 +32,7 @@ def fetch_status(url):
         return val, "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA ---
+# --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
@@ -62,21 +66,26 @@ st.divider()
 # --- GRAFIEK SECTIE ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We lezen de data direct van de web-link via de ID
+    # Lees de data in
     df = pd.read_csv(CSV_URL)
+    
     if not df.empty:
-        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
-        chart_data = pd.DataFrame({
+        # We maken een schone dataframe voor de grafiek
+        # Kolom 0 is meestal de datum, de laatste kolom de waarde
+        chart_df = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
         }).dropna()
-        # Teken de balkjes!
-        st.bar_chart(data=chart_data, x='Dag', y='Watt')
+        
+        st.bar_chart(data=chart_df, x='Dag', y='Watt')
     else:
-        st.info("Nog geen data gevonden in de sheet.")
-except Exception:
-    st.info("Grafiek aan het laden... (Check of je Sheet is 'Gepubliceerd op internet')")
+        st.info("De spreadsheet is leeg.")
+except Exception as e:
+    st.error(f"Kan geen data ophalen: {e}")
+    st.info("💡 Tip: Zorg dat de Sheet op 'Iedereen met de link' staat.")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+
+# Automatische verversing (Streamlit herlaadt de hele pagina)
 time.sleep(2)
 st.rerun()

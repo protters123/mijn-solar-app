@@ -74,12 +74,14 @@ try:
     df = pd.read_csv(fresh_url)
     
     if not df.empty:
-        # We maken de tabel schoon voor Streamlit
+        # We hernoemen de kolommen handmatig zodat het altijd klopt (1=Datum, 2=Symo, 3=Galvo, 4=Totaal)
+        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
+        
         # We tonen de data direct, met de nieuwste rijen boven
         st.table(df.iloc[::-1])
     else:
         st.info("De spreadsheet is leeg.")
-except Exception as e:
+except Exception:
     st.warning("Data wordt geladen...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")

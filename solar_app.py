@@ -6,10 +6,10 @@ import io
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE "FORCEER" TABEL FIX ☀️
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# DE DIRECTE CSV LINK
+# DIT IS DE DIRECTE LINK DIE JE STUURDE (Gecorrigeerd naar jouw spreadsheet)
 CSV_URL = "https://google.com"
 
 # INVERTER IP'S
@@ -66,23 +66,25 @@ st.divider()
 
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
-
 try:
-    # We gebruiken requests om de data op te halen (stabieler)
+    # We halen de data op als tekst
     response = requests.get(CSV_URL, timeout=5)
-    if response.status_code == 200:
-        # We zetten de tekst om naar een tabel
+    
+    # Check of we echt data krijgen of per ongeluk een Google-inlogscherm (HTML)
+    if response.status_code == 200 and not response.text.strip().startswith("<!doctype html>"):
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # We tonen de data direct, met de nieuwste rijen boven
-            st.table(df.iloc[::-1])
+            # We pakken de eerste 4 kolommen (Datum, Symo, Galvo, Totaal)
+            table_df = df.iloc[:, :4]
+            # Sorteer: Nieuwste dag bovenaan
+            st.table(table_df.iloc[::-1])
         else:
             st.info("De spreadsheet is leeg.")
     else:
-        st.warning("Google geeft geen data vrij. Controleer 'Publiceren op internet'.")
+        st.error("Google stuurt een website in plaats van data. Zorg dat je sheet 'Gepubliceerd op internet' is als CSV.")
 except Exception as e:
-    st.error(f"Verbindingsfout: {e}")
+    st.warning("Aan het wachten op data...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

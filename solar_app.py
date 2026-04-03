@@ -5,10 +5,10 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE WERKENDE VERSIE ☀️
+# SOLAR PIEK PRO - TABEL OVERZICHT ☀️
 # ==========================================
 
-# JOUW DIRECTE CSV LINK (Deze werkte het best)
+# JOUW DIRECTE CSV LINK
 CSV_URL = "https://google.com"
 
 # INVERTER GEGEVENS
@@ -63,21 +63,26 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK SECTIE ---
+# --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # We lezen de data direct van je werkende link
+    # We lezen de data direct van je link
     df = pd.read_csv(CSV_URL)
     
     if not df.empty:
-        # We pakken de 1e kolom (Datum) en de laatste (Totaal)
-        chart_df = pd.DataFrame({
-            'Dag': df.iloc[:, 0].astype(str),
-            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
+        # We pakken de 1e kolom (Datum) en de laatste (Totaal van Symo+Galvo)
+        table_df = pd.DataFrame({
+            'Datum': df.iloc[:, 0].astype(str),
+            'Piek (W)': pd.to_numeric(df.iloc[:, -1], errors='coerce')
         }).dropna()
         
-        # Teken de grafiek met groene balkjes
-        st.bar_chart(data=chart_df, x='Dag', y='Watt', color="#2ecc71")
+        # Sorteer op datum (nieuwste bovenaan)
+        table_df = table_df.iloc[::-1]
+
+        # De tabel tonen
+        # Gebruik st.table voor een vaste tabel of st.dataframe voor een interactieve
+        st.table(table_df)
+        
     else:
         st.info("De spreadsheet is leeg.")
 except Exception as e:

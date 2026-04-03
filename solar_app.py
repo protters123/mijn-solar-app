@@ -1,97 +1,87 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import requests
 import time
-import os
+import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# CONFIGURATIE - DENNIS SOLAR MONITOR
+# DENNIS SOLAR PIEK - CLOUD DATABASE VERSIE
 # ==========================================
 PUBLIEK_IP = "94.110.235.108"
-
-# Meter 1: Fronius Symo (Poort 8081)
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
-PEAK_FILE_1 = "piek_symo.txt"
-
-# Meter 2: Fronius Galvo (Poort 8082)
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-PEAK_FILE_2 = "piek_galvo.txt"
 
-# Totale Piek (Gecombineerd)
-PEAK_FILE_TOTAL = "piek_totaal.txt"
+# JOUW GOOGLE SHEET LINK
+SHEET_URL = "https://google.com"
 
-# ==========================================
-# FUNCTIES
-# ==========================================
-def get_peak(file):
-    if os.path.exists(file):
-        try:
-            with open(file, "r") as f: return float(f.read())
-        except: return 0.0
-    return 0.0
-
-def save_peak(file, value):
-    with open(file, "w") as f: f.write(str(value))
-
-def fetch_data(url):
-    try:
-        response = requests.get(url, timeout=3)
-        return abs(float(response.json()['active_power_w']))
-    except: return None
-
-# ==========================================
-# INTERFACE
-# ==========================================
 st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
 st.title("☀️ Solar Piek")
 
-# Data ophalen
-val_symo = fetch_data(URL_1)
-val_galvo = fetch_data(URL_2)
+# Maak verbinding met Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Bereken Totaal
-val_total = (val_symo or 0) + (val_galvo or 0) if (val_symo is not None or val_galvo is not None) else None
+# --- FUNCTIE: RECORDS OPHALEN ---
+def get_peaks():
+    try:
+        # Lees rij 2 van de sheet
+        df = conn.read(spreadsheet=SHEET_URL, ttl=0)
+        s = float(df.iloc[0, 0]) # Symo_Piek
+        g = float(df.iloc[0, 1]) # Galvo_Piek
+        t = float(df.iloc[0, 2]) # Totaal_Piek
+        return s, g, t
+    except Exception as e:
+        # Als er iets misgaat, gebruik dan deze startwaardes
+        return 3740.0, 0.0, 0.0
 
-# Oude pieken laden
-p_symo = get_peak(PEAK_FILE_1)
-p_galvo = get_peak(PEAK_FILE_2)
-p_total = get_peak(PEAK_FILE_TOTAL)
+# --- FUNCTIE: RECORDS OPSLAAN ---
+def save_peaks(s, g, t):
+    # Maak een tabelletje om terug te schrijven
+    new_df = pd.DataFrame([[s, g, t]], columns=["Symo_Piek", "Galvo_Piek", "Totaal_Piek"])
+    conn.update(spreadsheet=SHEET_URL, data=new_df)
 
-# Peak checks & opslaan
-if val_symo and val_symo > p_symo:
-    save_peak(PEAK_FILE_1, val_symo)
-    p_symo = val_symo
-if val_galvo and val_galvo > p_galvo:
-    save_peak(PEAK_FILE_2, val_galvo)
-    p_galvo = val_galvo
-if val_total and val_total > p_total:
-    save_peak(PEAK_FILE_TOTAL, val_total)
-    p_total = val_total
-    st.balloons() # Feestje bij een nieuw totaal-record!
+# --- HOOFDPROGRAMMA ---
+p_symo, p_galvo, p_total = get_peaks()
 
-# --- SECTIE 1: TOTAAL OVERZICHT ---
-st.markdown("### 📊 Totaaloverzicht (Gecombineerd)")
-st.info(f"Gecombineerde Piek: {p_total:,.0f} W")
-t1, t2 = st.columns(2)
-t1.metric("Live Totaal", f"{val_total:,.0f} W" if val_total is not None else "Offline")
-t2.metric("🏆 Hoogste Totaal", f"{p_total:,.0f} W")
+try:
+    # Live data ophalen
+    val_symo = abs(float(requests.get(URL_1, timeout=2).json()['active_power_w']))
+    val_galvo = abs(float(requests.get(URL_2, timeout=2).json()['active_power_w']))
+    val_total = val_symo + val_galvo
+    
+    # Check voor nieuwe records
+    updated = False
+    if val_symo > p_symo: p_symo = val_symo; updated = True
+    if val_galvo > p_galvo: p_galvo = val_galvo; updated = True
+    if val_total > p_total: 
+        p_total = val_total; updated = True
+        st.balloons() # Feestje bij nieuw totaal-record!
+    
+    # Sla alleen op in Google Sheets als er een NIEUW record is
+    if updated:
+        save_peaks(p_symo, p_galvo, p_total)
 
-st.divider()
+    # Display op scherm
+    st.markdown(f"### 📊 Totaaloverzicht: {val_total:,.0f} W")
+    st.metric("🏆 Hoogste Totaal Ooit", f"{p_total:,.0f} W")
+    
+    st.divider()
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("🔹 Symo")
+        st.metric("Nu", f"{val_symo:,.0f} W")
+        st.metric("Piek", f"{p_symo:,.0f} W")
+    with c2:
+        st.subheader("🔸 Galvo")
+        st.metric("Nu", f"{val_galvo:,.0f} W")
+        st.metric("Piek", f"{p_galvo:,.0f} W")
 
-# --- SECTIE 2: INDIVIDUEEL ---
-col_a, col_b = st.columns(2)
+except Exception:
+    st.warning("Aan het verbinden met HomeWizard...")
 
-with col_a:
-    st.subheader("🔹 Fronius Symo")
-    st.metric("Nu", f"{val_symo:,.0f} W" if val_symo is not None else "Offline")
-    st.metric("🏆 Piek symo", f"{p_symo:,.0f} W")
-
-with col_b:
-    st.subheader("🔸 Fronius Galvo")
-    st.metric("Nu", f"{val_galvo:,.0f} W" if val_galvo is not None else "Offline")
-    st.metric("🏆 Piek Galvo", f"{p_galvo:,.0f} W")
-
-# Tijd & Auto-refresh
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
+# Tijd & Refresh
+st.caption(f"Laatste check: {datetime.now().strftime('%H:%M:%S')} | Database: Google Sheets")
 time.sleep(2)
 st.rerun()
+

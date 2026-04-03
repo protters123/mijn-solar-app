@@ -5,13 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE GRAFIEK FIX
+# SOLAR PIEK PRO - DE ALLERLAATSTE POGING
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
+# JOUW GOOGLE SHEET LINK (DIRECTE CSV EXPORT)
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -60,19 +60,21 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (MAANDOVERZICHT) ---
+# --- DE GRAFIEK (DIT MOET WERKEN) ---
 st.subheader("📅 Maandoverzicht")
 try:
-    df = pd.read_csv(SHEET_URL)
-    if not df.empty:
-        df.columns = [c.strip() for c in df.columns]
-        df[df.columns[-1]] = pd.to_numeric(df[df.columns[-1]], errors='coerce')
-        st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
+    # We lezen de data direct van de web-link
+    df_chart = pd.read_csv(SHEET_URL)
+    if not df_chart.empty:
+        # We maken de kolomnamen simpel: 'A', 'B', 'C', 'D'
+        df_chart.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
+        # We tekenen alleen de Datum en het Totaal
+        st.bar_chart(data=df_chart, x='Datum', y='Totaal')
     else:
-        st.info("Nog geen data gevonden in de sheet.")
+        st.info("Vul data in rij 2 van je Google Sheet in.")
 except Exception as e:
-    st.info("Grafiek aan het laden...")
+    st.info("De grafiek verschijnt zodra de Google Sheet is gepubliceerd.")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)
 st.rerun()

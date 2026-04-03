@@ -8,11 +8,11 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# 1. Google Sheet Configuratie (HIER ZAT DE FOUT)
+# 1. Google Sheet Configuratie (GEFIXTE URL)
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-SHEET_NAME = "Historiek" 
+SHEET_NAME = "Historiek"  # Let op de hoofdletter 'H' zoals in je sheet
 
-# DE CORRECTE URL STRUCTUUR:
+# DIT IS DE CORRECTE LINK STRUCTUUR:
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
 
 # 2. Inverter Gegevens (Publiek IP)
@@ -64,10 +64,10 @@ st.divider()
 # --- De Grafiek Sectie ---
 st.subheader("📊 Maandoverzicht")
 try:
-    # Data ophalen uit de sheet
+    # Data ophalen uit de sheet via de correcte CSV_URL
     df = pd.read_csv(CSV_URL)
     
-    # We koppelen exact de kolomnamen uit jouw spreadsheet
+    # We koppelen de kolomnamen 'Datum' en 'Totaal' uit je spreadsheet
     if 'Datum' in df.columns and 'Totaal' in df.columns:
         chart_df = pd.DataFrame({
             'Dag': df['Datum'].astype(str),

@@ -6,7 +6,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE VERSIE
+# SOLAR PIEK PRO - AUTOMATISCHE GRAFIEK FIX
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -35,7 +35,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records in het geheugen van de app
+# Update records
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -61,22 +61,24 @@ with c2:
 
 st.divider()
 
-# --- HISTORIEK GRAFIEK ---
+# --- GRAFIEK SECTIE ---
 st.subheader("📅 Maandoverzicht Hoogste Pieken")
 try:
-    df_hist = conn.read(spreadsheet=SHEET_URL, worksheet="Historiek", ttl=0)
+    # We proberen de data te lezen (zonder specifiek blad te noemen voor meer succes)
+    df_hist = conn.read(spreadsheet=SHEET_URL, ttl=0)
+    
     if not df_hist.empty:
-        # We maken de kolomnamen schoon (verwijderen eventuele extra spaties)
-        df_hist.columns = [c.strip().replace(' ', '_') for c in df_hist.columns]
-        # We zetten de datum om naar een leesbaar formaat
-        df_hist['Datum'] = pd.to_datetime(df_hist['Datum']).dt.date
-        # We pakken de laatste kolom (Totaal) voor de grafiek
-        st.bar_chart(data=df_hist, x='Datum', y=df_hist.columns[-1])
+        # We maken de kolomnamen schoon
+        df_hist.columns = [str(c).strip() for c in df_hist.columns]
+        # We zetten de eerste kolom om naar datum
+        df_hist.iloc[:, 0] = pd.to_datetime(df_hist.iloc[:, 0]).dt.date
+        # We tekenen de grafiek: X-as is de eerste kolom, Y-as is de laatste kolom
+        st.bar_chart(data=df_hist, x=df_hist.columns[0], y=df_hist.columns[-1])
     else:
-        st.info("Vul een datum en piek in het tabblad 'Historiek' in Google Sheets.")
-except:
-    st.caption("Grafiek laden... Vul de kolommen in Google Sheets correct in.")
+        st.info("Vul data in onder de titels in Google Sheets.")
+except Exception as e:
+    st.caption("Verbinding maken met Google Sheets...")
 
-st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
+st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)
 st.rerun()

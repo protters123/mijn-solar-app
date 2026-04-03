@@ -5,16 +5,14 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE FIX 💚
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GOOGLE SHEET ID (DEZE MOET EXACT KLOPPEN)
+# JOUW GOOGLE SHEET ID EN DE DIRECTE DATA LINK
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-
-# De juiste CSV-link voor het tabblad 'Historiek'
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -77,7 +75,7 @@ try:
         # Teken de balkjes!
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
-        st.info("Vul een datum en piek in je Google Sheet in.")
+        st.info("Nog geen data gevonden in de sheet.")
 except Exception:
     st.info("Grafiek aan het laden... (Check of je Sheet is 'Gepubliceerd op internet')")
 

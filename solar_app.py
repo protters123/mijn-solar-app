@@ -5,22 +5,24 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - NOOD-FIX GRAFIEK 💚
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK
-SHEET_URL = "https://google.com"
+# JOUW GOOGLE SHEET ID (RECHTSTREEKSE EXPORT)
+SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
+# We gebruiken nu de meest directe link die Google toestaat
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=150651261"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
 # --- RECORDS UIT SECRETS ---
 if 'p_total' not in st.session_state:
     st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
-    st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.376)
-    st.session_state.p_total = st.secrets.get("totaal_piek", 3717.376)
+    st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
+    st.session_state.p_total = st.secrets.get("totaal_piek", 3717.0)
 
 def fetch_status(url):
     try:
@@ -44,7 +46,7 @@ if val_t > st.session_state.p_total:
 # --- DISPLAY ---
 st.title("💚 Solar Piek Pro")
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.1f} W")
+st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
 st.divider()
 
@@ -52,31 +54,33 @@ c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_symo:,.1f} W")
+    st.caption(f"Record: {st.session_state.p_symo} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_galvo:,.3f} W")
+    st.caption(f"Record: {st.session_state.p_galvo} W")
 
 st.divider()
 
-# --- GRAFIEK (FORCEER BALKJES) ---
+# --- GRAFIEK SECTIE (FIXED) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de CSV
-    df = pd.read_csv(SHEET_URL)
-    if not df.empty:
-        # We maken een heel simpele tabel voor de grafiek
-        # We pakken de 1e kolom voor de tekst en de laatste voor de hoogte
-        labels = df.iloc[:, 0].astype(str).tolist()
-        values = pd.to_numeric(df.iloc[:, -1], errors='coerce').fillna(0).tolist()
+    # We lezen de data direct van de export link
+    df_raw = pd.read_csv(CSV_URL)
+    if not df_raw.empty:
+        # We pakken alleen de eerste en de laatste kolom
+        # We dwingen 'Dag' naar tekst en 'Piek' naar getallen
+        df_chart = pd.DataFrame({
+            'Dag': df_raw.iloc[:, 0].astype(str),
+            'Watt': pd.to_numeric(df_raw.iloc[:, -1], errors='coerce')
+        }).dropna()
         
-        # We maken een balken-grafiek
-        st.bar_chart(pd.DataFrame(values, index=labels, columns=["Watt"]))
+        # We tekenen eindelijk de balkjes!
+        st.bar_chart(data=df_chart, x='Dag', y='Watt')
     else:
-        st.info("Nog geen data gevonden in de sheet.")
-except Exception as e:
-    st.info("Grafiek laden...")
+        st.info("Vul een datum en piek in je Google Sheet in.")
+except Exception:
+    st.caption("Verbinding maken met Google Sheets...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

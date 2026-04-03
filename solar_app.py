@@ -48,11 +48,11 @@ try:
     with c1:
         st.subheader("🔹 Symo")
         st.metric("Nu", f"{val_symo:,.0f} W")
-        st.metric("Piek", f"{st.session_state.p_symo:,.0f} W")
+        st.metric("Piek Symo", f"{st.session_state.p_symo:,.0f} W")
     with c2:
         st.subheader("🔸 Galvo")
         st.metric("Nu", f"{val_galvo:,.0f} W")
-        st.metric("Piek", f"{st.session_state.p_galvo:,.0f} W")
+        st.metric("Piek Galvo", f"{st.session_state.p_galvo:,.0f} W")
 
 except Exception:
     st.warning("⚠️ Live verbinding weg. Records uit geheugen zichtbaar.")

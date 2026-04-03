@@ -5,13 +5,13 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX 💚
+# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK
+# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -67,19 +67,17 @@ try:
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
         # We maken een schone tabel: 1e kolom als Dag, laatste als Watt
-        # We dwingen de cijfers om echte getallen te zijn (.to_numeric)
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
         })
-        # Verwijder regels waar geen getal staat
         chart_data = chart_data.dropna()
-        # Teken de balkjes (niet de tabel!)
+        # Teken de balkjes (zorg dat 'Dag' op de X-as staat)
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
         st.info("Nog geen data gevonden in de sheet.")
 except Exception as e:
-    st.info("Grafiek laden...")
+    st.info("Grafiek aan het laden...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

@@ -5,88 +5,72 @@ import os
 from datetime import datetime
 
 # ==========================================
-# CONFIGURATIE - HOMEWIZARD KWH METER
+# CONFIGURATIE - TWEE METERS (VIA CLOUD)
 # ==========================================
-HW_IP = "94.110.235.108:8081"  # Jouw HomeWizard IP-adres
-URL = f"http://{HW_IP}/api/v1/data"
-PEAK_FILE = "hoogste_piek.txt"
+PUBLIEK_IP = "94.110.235.108"
+
+# Meter 1 (Poort 8081)
+URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
+PEAK_FILE_1 = "piek_meter_1.txt"
+
+# Meter 2 (Poort 8082)
+URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
+PEAK_FILE_2 = "piek_meter_2.txt"
 
 # ==========================================
-# FUNCTIES VOOR DATA & OPSLAG
+# FUNCTIES
 # ==========================================
-def get_saved_peak():
-    if os.path.exists(PEAK_FILE):
+def get_peak(file):
+    if os.path.exists(file):
         try:
-            with open(PEAK_FILE, "r") as f:
-                return float(f.read())
-        except:
-            return 0.0
+            with open(file, "r") as f: return float(f.read())
+        except: return 0.0
     return 0.0
 
-def save_new_peak(value):
-    with open(PEAK_FILE, "w") as f:
-        f.write(str(value))
+def save_peak(file, value):
+    with open(file, "w") as f: f.write(str(value))
 
-def fetch_homewizard_data():
+def fetch_data(url):
     try:
-        response = requests.get(URL, timeout=3)
-        data = response.json()
-        # Bij een kWh meter voor zonnepanelen kijken we naar 'active_power_w'
-        # We gebruiken abs() omdat opwekking soms als negatief getal wordt getoond
-        wattage = abs(float(data['active_power_w']))
-        return wattage
-    except Exception as e:
-        return None
+        response = requests.get(url, timeout=3)
+        return abs(float(response.json()['active_power_w']))
+    except: return None
 
 # ==========================================
-# DE INTERFACE (GSM VRIENDELIJK)
+# INTERFACE
 # ==========================================
-st.set_page_config(page_title="Zonne-Piek Monitor", page_icon="⚡")
+st.set_page_config(page_title="Dual Solar Monitor", page_icon="⚡", layout="centered")
+st.title("⚡ HomeWizard Dual Monitor")
 
-st.title("⚡ HomeWizard Solar Piek")
-st.subheader("Live opbrengst van je panelen")
+# Data ophalen
+val1 = fetch_data(URL_1)
+val2 = fetch_data(URL_2)
+p1 = get_peak(PEAK_FILE_1)
+p2 = get_peak(PEAK_FILE_2)
 
-# Haal data op
-current_w = fetch_homewizard_data()
-old_peak = get_saved_peak()
+# Peak checks
+if val1 and val1 > p1:
+    save_peak(PEAK_FILE_1, val1)
+    p1 = val1
+if val2 and val2 > p2:
+    save_peak(PEAK_FILE_2, val2)
+    p2 = val2
 
-# Check voor nieuwe record-piek
-if current_w is not None and current_w > old_peak:
-    save_new_peak(current_w)
-    st.balloons() # Feestje op je scherm bij een record!
-    highest_peak = current_w
-else:
-    highest_peak = old_peak
+# Weergave Meter 1
+st.subheader("☀️ Meter 1 (Zonnepanelen)")
+c1, c2 = st.columns(2)
+c1.metric("Nu", f"{val1:,.0f} W" if val1 is not None else "Offline")
+c2.metric("🏆 Piek", f"{p1:,.0f} W")
 
-# Weergave in grote blokken
-col1, col2 = st.columns(2)
+st.divider()
 
-with col1:
-    if current_w is not None:
-        st.metric(label="Huidige Opwekking", value=f"{current_w:,.0f} W")
-    else:
-        st.error("Meter niet gevonden")
-        st.info("Check of 'Lokale API' aanstaat in de HomeWizard app.")
+# Weergave Meter 2
+st.subheader("🔋 Meter 2 (Extra Groep)")
+c3, c4 = st.columns(2)
+c3.metric("Nu", f"{val2:,.0f} W" if val2 is not None else "Offline")
+c4.metric("🏆 Piek", f"{p2:,.0f} W")
 
-with col2:
-    st.metric(label="🏆 Hoogste Piek Ooit", value=f"{highest_peak:,.0f} W")
-
-# Tijdstip van laatste meting
-now = datetime.now().strftime("%H:%M:%1")
-st.caption(f"Laatste update: {now} | Ververst elke 5 seconden")
-
-# Grafiek van de laatste metingen
-if 'history' not in st.session_state:
-    st.session_state.history = []
-
-if current_w is not None:
-    st.session_state.history.append(current_w)
-    if len(st.session_state.history) > 60: # Laatste minuut bij 5s interval
-        st.session_state.history.pop(0)
-
-if st.session_state.history:
-    st.line_chart(st.session_state.history)
-
-# Automatische herstart van het script voor live updates
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 5 sec interval")
 time.sleep(5)
 st.rerun()
+

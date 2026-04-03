@@ -5,10 +5,10 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - TABEL OVERZICHT ☀️
+# SOLAR PIEK PRO - TABEL EDITIE ☀️
 # ==========================================
 
-# JOUW DIRECTE CSV LINK
+# DE DIRECTE LINK DIE JE STUURDE (MOET PRECIES DEZE ZIJN)
 CSV_URL = "https://google.com"
 
 # INVERTER GEGEVENS
@@ -31,14 +31,11 @@ def fetch_status(url):
         return val, "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA OPHALEN ---
+# --- LIVE DATA ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
-if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
-if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
     st.session_state.p_total = val_t
     st.balloons()
@@ -50,45 +47,44 @@ st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
 st.divider()
 
-# Symo & Galvo sectie
+# Live meters
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_symo:,.0f} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_galvo:,.0f} W")
 
 st.divider()
 
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
+    # Inlezen van de CSV
     df = pd.read_csv(CSV_URL)
     
     if not df.empty:
-        # We pakken de kolommen op hun plek (0=Datum, 1=Symo, 2=Galvo, 3=Totaal)
-        # Zo krijgt de code geen foutmelding meer op namen als 'Datum'
+        # We pakken de kolommen op positie om fouten te voorkomen
         table_df = pd.DataFrame({
             'Datum': df.iloc[:, 0].astype(str),
             'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
             'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
             'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
         }).dropna(how='all')
-        
-        # Sorteer: Nieuwste dag bovenaan
-        st.table(table_df.iloc[::-1])
+
+        # Kleur de getallen groen (alleen voor weergave)
+        # Sorteer nieuwste bovenaan
+        st.dataframe(
+            table_df.iloc[::-1].style.format(precision=0).column_config(
+                "Totaal (W)", help="Gecombineerde piek", width="medium"
+            )
+        )
     else:
-        st.info("Nog geen historische data gevonden.")
+        st.info("Spreadsheet is leeg.")
 except Exception as e:
-    st.error(f"Fout bij laden tabel: {e}")
+    st.error("Wacht op data van Google Sheets...")
 
-
-
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
-
-# Refresh de pagina elke 2 seconden
+st.caption(f"Laatste update: {datetime.now().strftime('%H:%M:%S')}")
 time.sleep(2)
 st.rerun()

@@ -9,7 +9,7 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
+# VERVANG DEZE REGEL MET JOUW EXPOR-LINK
 CSV_URL = "https://google.com"
 
 # INVERTER IP'S
@@ -80,7 +80,7 @@ try:
         else:
             st.info("De spreadsheet is momenteel leeg.")
     else:
-        st.error("Google stuurt nog steeds een website. Zorg dat je sheet 'Gepubliceerd op internet' is als CSV.")
+        st.error("Link is nog niet correct. Zorg dat de URL naar het CSV-bestand verwijst.")
 except Exception as e:
     st.warning(f"Data wordt geladen... ({e})")
 

@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -19,8 +19,8 @@ st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="cent
 # --- RECORDS UIT SECRETS ---
 if 'p_total' not in st.session_state:
     st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
-    st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
-    st.session_state.p_total = st.secrets.get("totaal_piek", 3717.0)
+    st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.376)
+    st.session_state.p_total = st.secrets.get("totaal_piek", 3717.376)
 
 def fetch_status(url):
     try:
@@ -44,7 +44,7 @@ if val_t > st.session_state.p_total:
 # --- DISPLAY ---
 st.title("💚 Solar Piek Pro")
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
+st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.1f} W")
 
 st.divider()
 
@@ -52,27 +52,29 @@ c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_symo} W")
+    st.caption(f"Record: {st.session_state.p_symo:,.1f} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.caption(f"Record: {st.session_state.p_galvo} W")
+    st.caption(f"Record: {st.session_state.p_galvo:,.3f} W")
 
 st.divider()
 
 # --- GRAFIEK (GEFORCEERD) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de data
+    # We downloaden de CSV data
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We negeren de namen en pakken gewoon kolom 1 en kolom 4
-        # We dwingen de cijfers om echte getallen te zijn
+        # We maken een schone tabel: 1e kolom als Dag, laatste als Watt
+        # We dwingen de cijfers om echte getallen te zijn (.to_numeric)
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
-        }).dropna()
-        # Toon als balkjes
+        })
+        # Verwijder regels waar geen getal staat
+        chart_data = chart_data.dropna()
+        # Teken de balkjes (niet de tabel!)
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
         st.info("Nog geen data gevonden in de sheet.")

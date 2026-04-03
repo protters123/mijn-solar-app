@@ -11,7 +11,7 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD NAAR CSV OUTPUT)
+# JOUW NIEUWE GEPUBLICEERDE CSV LINK
 SHEET_URL = "https://google.com"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
@@ -63,17 +63,22 @@ st.divider()
 # --- GRAFIEK (MAANDOVERZICHT) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We laden de data via de CSV link
+    # We downloaden de CSV
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
         # We maken de kolomnamen schoon
         df.columns = [c.strip() for c in df.columns]
-        # We dwingen de laatste kolom naar een getal
-        df.iloc[:, -1] = pd.to_numeric(df.iloc[:, -1], errors='coerce')
-        # Teken de grafiek: X-as is de eerste kolom (Datum), Y-as is de laatste (Totaal)
-        st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
+        # We pakken de eerste en laatste kolom
+        chart_data = pd.DataFrame({
+            'Dag': df.iloc[:, 0].astype(str),
+            'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
+        }).dropna()
+        # Teken de grafiek
+        st.bar_chart(data=chart_data, x='Dag', y='Watt')
+    else:
+        st.info("Nog geen data gevonden in de sheet.")
 except Exception as e:
-    st.info("Wacht op data uit Google Sheets...")
+    st.info("Grafiek wordt geladen...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | Ververst elke 2 sec")
 time.sleep(2)

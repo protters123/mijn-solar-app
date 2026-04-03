@@ -8,21 +8,17 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# 1. Google Sheet Configuratie (GEFIXTE URL)
-SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-SHEET_NAME = "Historiek" 
+# DE DIRECTE LINK UIT JOUW SCREENSHOT (Publiceer op internet)
+PUB_URL = "https://google.com"
 
-# DIT IS DE CORRECTE LINK (Vervangt de google.com link volledig)
-CSV_URL = "https://google.com" + SHEET_ID + "/gviz/tq?tqx=out:csv&sheet=" + SHEET_NAME
-
-# 2. Inverter Gegevens
+# 2. Inverter Gegevens (Publiek IP)
 PUBLIEK_IP = "94.110.235.108" 
-URL_1 = "http://" + PUBLIEK_IP + ":8081/api/v1/data"
-URL_2 = "http://" + PUBLIEK_IP + ":8082/api/v1/data"
+URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
+URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- Records initialiseren ---
+# --- Records laden ---
 if 'p_total' not in st.session_state:
     st.session_state.p_symo = st.secrets.get("symo_piek", 3711.0)
     st.session_state.p_galvo = st.secrets.get("galvo_piek", 6.0)
@@ -51,23 +47,13 @@ st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
 st.divider()
 
-c1, c2 = st.columns(2)
-with c1:
-    st.markdown(f"### {icon_s} Symo")
-    st.metric("Nu", f"{val_s:,.0f} W")
-with c2:
-    st.markdown(f"### {icon_g} Galvo")
-    st.metric("Nu", f"{val_g:,.0f} W")
-
-st.divider()
-
 # --- De Grafiek Sectie ---
 st.subheader("📊 Maandoverzicht")
 try:
-    # Data ophalen uit de sheet via de correcte CSV_URL
-    df = pd.read_csv(CSV_URL)
+    # We lezen de data direct van de gepubliceerde link
+    df = pd.read_csv(PUB_URL)
     
-    # We gebruiken de kolomnamen 'Datum' en 'Totaal' uit jouw spreadsheet
+    # Gebruik de kolomnamen 'Datum' en 'Totaal' uit je tabel
     if 'Datum' in df.columns and 'Totaal' in df.columns:
         chart_df = pd.DataFrame({
             'Dag': df['Datum'].astype(str),
@@ -76,12 +62,12 @@ try:
         
         st.bar_chart(data=chart_df, x='Dag', y='Watt')
     else:
-        st.warning("Kolommen 'Datum' of 'Totaal' niet gevonden.")
+        st.warning(f"Kolommen niet gevonden. Ik zie: {df.columns.tolist()}")
 except Exception as e:
-    st.error(f"Fout bij verbinden: {e}")
+    st.error(f"Kan data niet laden: {e}")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 
-# Refresh de pagina
+# Pagina verversen
 time.sleep(2)
 st.rerun()

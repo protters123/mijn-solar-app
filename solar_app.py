@@ -13,6 +13,7 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 # JOUW NIEUWE GEPUBLICEERDE CSV LINK
 SHEET_URL = "https://google.com"
+CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 

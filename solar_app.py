@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - FINALE GRAFIEK FIX 💚
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX 💚
 # ==========================================
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -60,13 +60,13 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (MAANDOVERZICHT) ---
+# --- GRAFIEK (GEFORCEERD) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de CSV en dwingen de data naar getallen
+    # We downloaden de data
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We maken een schone tabel voor de grafiek
+        # We pakken gewoon de eerste en laatste kolom, wat de namen ook zijn
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
@@ -74,9 +74,9 @@ try:
         # Toon als balkjes
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
-        st.info("Nog geen data gevonden in de Google Sheet.")
-except Exception:
-    st.info("Grafiek aan het laden...")
+        st.info("Nog geen data gevonden in de sheet.")
+except Exception as e:
+    st.info("Grafiek laden...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

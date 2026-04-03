@@ -2,14 +2,15 @@ import streamlit as st
 import requests
 import time
 import pandas as pd
+import random
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE TABEL ☀️
+# SOLAR PIEK PRO - DE FORCEER-CACHE-FIX ☀️
 # ==========================================
 
-# DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
-CSV_URL = "https://google.com"
+# JOUW DIRECTE CSV LINK
+BASE_URL = "https://google.com"
 
 # INVERTER GEGEVENS
 PUBLIEK_IP = "94.110.235.108" 
@@ -66,31 +67,29 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # Inladen van de CSV (Data van Google Sheets)
-    df = pd.read_csv(CSV_URL)
+    # TRUC: Voeg een willekeurig nummer toe aan de URL zodat Google/Streamlit niet de oude versie pakt
+    csv_url_fresh = f"{BASE_URL}&cache_bust={random.randint(1, 100000)}"
     
-    if not df.empty:
-        # We pakken de kolommen op positie: 0=Datum, 1=Symo, 2=Galvo, 3=Totaal
-        # Gebruik pd.to_numeric met errors='coerce' om de cijfers groen te laten oplichten in Streamlit
+    df = pd.read_csv(csv_url_fresh)
+    
+    if not df.empty and len(df.columns) >= 4:
+        # Maak de tabel op basis van positie
         table_df = pd.DataFrame({
             'Datum': df.iloc[:, 0].astype(str),
             'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
             'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
             'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
-        }).dropna(how='all')
+        }).dropna(subset=['Datum']) # Alleen rijen met een datum
         
-        # Sorteer nieuwste bovenaan
-        table_df = table_df.iloc[::-1]
-
-        # De tabel tonen
-        st.dataframe(table_df, use_container_width=True, hide_index=True)
+        # Laatste dag bovenaan
+        st.dataframe(table_df.iloc[::-1], use_container_width=True, hide_index=True)
     else:
-        st.info("De spreadsheet is momenteel leeg.")
-except Exception:
-    st.info("Wacht op data van Google Sheets...")
+        st.info("Bezig met ophalen van data uit de cloud...")
+except Exception as e:
+    st.warning("De tabel wordt geladen zodra er data in je Google Sheet staat.")
 
-st.caption(f"Laatste update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 
-# Refresh de pagina
+# Ververs pagina
 time.sleep(2)
 st.rerun()

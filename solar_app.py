@@ -8,7 +8,7 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE TABEL ☀️
 # ==========================================
 
-# JOUW DIRECTE CSV LINK (GEFIXTE VERSIE)
+# DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
 CSV_URL = "https://google.com"
 
 # INVERTER GEGEVENS
@@ -66,11 +66,11 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # Forceer pandas om de sheet vers te laden
+    # Inladen van de CSV (Data van Google Sheets)
     df = pd.read_csv(CSV_URL)
     
     if not df.empty:
-        # We bouwen de tabel op positie: 0=Datum, 1=Symo, 2=Galvo, 3=Totaal
+        # We pakken de kolommen op positie: 0=Datum, 1=Symo, 2=Galvo, 3=Totaal
         table_df = pd.DataFrame({
             'Datum': df.iloc[:, 0].astype(str),
             'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
@@ -81,8 +81,8 @@ try:
         # Sorteer nieuwste bovenaan
         table_df = table_df.iloc[::-1]
 
-        # De tabel tonen (wit met groene accenten door Streamlit design)
-        st.dataframe(table_df, use_container_width=True)
+        # De tabel tonen
+        st.dataframe(table_df, use_container_width=True, hide_index=True)
     else:
         st.info("De spreadsheet is momenteel leeg.")
 except Exception:

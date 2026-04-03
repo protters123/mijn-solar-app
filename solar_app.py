@@ -63,14 +63,10 @@ st.divider()
 # --- GRAFIEK (MAANDOVERZICHT) ---
 st.subheader("📅 Maandoverzicht")
 try:
-    # We downloaden de CSV data
     df = pd.read_csv(SHEET_URL)
     if not df.empty:
-        # We maken de kolomnamen schoon van spaties
         df.columns = [c.strip() for c in df.columns]
-        # We dwingen de laatste kolom (Totaal) naar getallen voor de balkjes
         df[df.columns[-1]] = pd.to_numeric(df[df.columns[-1]], errors='coerce')
-        # Datum kolom als X-as, Laatste kolom (Piek_Totaal) als Y-as
         st.bar_chart(data=df, x=df.columns[0], y=df.columns[-1])
     else:
         st.info("Nog geen data gevonden in de sheet.")

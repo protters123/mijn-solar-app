@@ -11,7 +11,7 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-# JOUW GEPUBLICEERDE CSV LINK
+# JOUW GEPUBLICEERDE CSV LINK (GECORRIGEERD)
 SHEET_ID = "1OeCoRbusZQjeXgnQi4YoKD1P8k84mHc0akqX2LizE3g"
 CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
@@ -61,13 +61,13 @@ with c2:
 
 st.divider()
 
-# --- GRAFIEK (GEFORCEERD) ---
+# --- GRAFIEK (MAANDOVERZICHT) ---
 st.subheader("💚 Maandoverzicht")
 try:
-    # We downloaden de CSV en negeren de kolomnamen
+    # We downloaden de data via de gecorrigeerde link
     df = pd.read_csv(CSV_URL)
     if not df.empty:
-        # We pakken de eerste kolom (Datum) en de laatste (Totaal)
+        # We pakken de eerste en laatste kolom
         chart_data = pd.DataFrame({
             'Dag': df.iloc[:, 0].astype(str),
             'Watt': pd.to_numeric(df.iloc[:, -1], errors='coerce')
@@ -76,8 +76,8 @@ try:
         st.bar_chart(data=chart_data, x='Dag', y='Watt')
     else:
         st.info("Nog geen data gevonden in de sheet.")
-except Exception as e:
-    st.info("Grafiek laden...")
+except Exception:
+    st.info("Grafiek aan het laden...")
 
 st.caption(f"Check: {datetime.now().strftime('%H:%M:%S')} | 2 sec interval")
 time.sleep(2)

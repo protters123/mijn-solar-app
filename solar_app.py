@@ -84,7 +84,7 @@ col_a, col_b = st.columns(2)
 with col_a:
     st.subheader("🔹 Fronius Symo")
     st.metric("Nu", f"{val_symo:,.0f} W" if val_symo is not None else "Offline")
-    st.metric("🏆 Piek", f"{p_symo:,.0f} W")
+    st.metric("🏆 Piek symo", f"{p_symo:,.0f} W")
 
 with col_b:
     st.subheader("🔸 Fronius Galvo")

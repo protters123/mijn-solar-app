@@ -6,13 +6,13 @@ import random
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE TABEL ☀️
+# SOLAR PIEK PRO - DE DEFINITIEVE TABEL FIX ☀️
 # ==========================================
 
-# DE DIRECTE CSV LINK
-BASE_URL = "https://google.com"
+# 1. DE LINK (Directe CSV export van je sheet)
+CSV_URL = "https://google.com"
 
-# INVERTER GEGEVENS
+# 2. INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
@@ -67,25 +67,23 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # Forceer verse data van Google
-    csv_url_fresh = f"{BASE_URL}&cache_bust={random.randint(1, 100000)}"
-    df = pd.read_csv(csv_url_fresh)
+    # We voegen een random getal toe om caching te voorkomen
+    fresh_url = f"{CSV_URL}&cache={random.randint(1, 100000)}"
+    
+    # We laden de data zonder koppen te forceren (skiprows=0)
+    df = pd.read_csv(fresh_url)
     
     if not df.empty:
-        # We bouwen de tabel op basis van de eerste 4 kolommen uit je screenshot
-        table_df = pd.DataFrame({
-            'Datum': df.iloc[:, 0].astype(str),
-            'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce').fillna(0),
-            'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0),
-            'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce').fillna(0)
-        })
+        # We hernoemen de kolommen handmatig zodat het altijd klopt
+        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
         
         # Laatste dag bovenaan tonen
-        st.dataframe(table_df.iloc[::-1], use_container_width=True, hide_index=True)
+        st.table(df.iloc[::-1])
     else:
         st.info("De spreadsheet is leeg.")
-except Exception:
-    st.warning("De tabel wordt geladen zodra de data van Google Sheets beschikbaar is.")
+except Exception as e:
+    st.warning("Data wordt geladen...")
+    # st.write(e) # Haal het hekje weg als je de exacte fout wilt zien
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

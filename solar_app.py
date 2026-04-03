@@ -9,7 +9,7 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
-# DIT IS DE DIRECTE LINK DIE JE STUURDE (Gecorrigeerd naar jouw spreadsheet)
+# DIT IS DE ENIGE CORRECTE LINK OM JOUW DATA OP TE HALEN:
 CSV_URL = "https://google.com"
 
 # INVERTER IP'S
@@ -67,23 +67,22 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # We halen de data op als tekst
+    # Ophalen van data
     response = requests.get(CSV_URL, timeout=5)
     
-    # Check of we echt data krijgen of per ongeluk een Google-inlogscherm (HTML)
+    # We controleren of de data echt tekst is en geen website (HTML)
     if response.status_code == 200 and not response.text.strip().startswith("<!doctype html>"):
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # We pakken de eerste 4 kolommen (Datum, Symo, Galvo, Totaal)
-            table_df = df.iloc[:, :4]
-            # Sorteer: Nieuwste dag bovenaan
-            st.table(table_df.iloc[::-1])
+            # We tonen de data direct, met de nieuwste rijen boven
+            # Gebruik st.dataframe voor de groene accenten van Streamlit
+            st.dataframe(df.iloc[::-1], use_container_width=True, hide_index=True)
         else:
             st.info("De spreadsheet is leeg.")
     else:
-        st.error("Google stuurt een website in plaats van data. Zorg dat je sheet 'Gepubliceerd op internet' is als CSV.")
-except Exception as e:
+        st.error("Google stuurt nog steeds een website. Check of je sheet 'Gepubliceerd op internet' is als CSV.")
+except Exception:
     st.warning("Aan het wachten op data...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")

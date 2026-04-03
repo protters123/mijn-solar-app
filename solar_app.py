@@ -13,7 +13,7 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 # JOUW GOOGLE SHEET ID EN DE DIRECTE DATA LINK
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
+CSV_URL = f"https://docs.google.com{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historiek"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 

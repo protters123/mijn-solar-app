@@ -83,8 +83,9 @@ try:
                 'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
             }).dropna(subset=['Datum'])
             
-            # Sorteer: Nieuwste dag bovenaan
-            st.table(table_df.iloc[::-1])
+          # Zoek deze regel onderaan in je code:
+          st.dataframe(table_df.iloc[::-1], use_container_width=True, hide_index=True)
+
         else:
             st.info("De spreadsheet is momenteel leeg.")
 except Exception:

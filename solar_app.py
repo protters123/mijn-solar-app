@@ -5,10 +5,10 @@ import pandas as pd
 import io
 from datetime import datetime
 
-# DIT IS DE CORRECTE LINK VOOR EXPORT:
-# DEZE LINK MOET PRECIES ZO ZIJN:
+# VERVANG REGEL 8 T/M 10 DOOR DIT:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
+# Let op de /d/ en de https://google.com
+CSV_URL = f"https://google.comspreadsheets/d/{SHEET_ID}/import?format=csv"
 
 
 # INVERTERS

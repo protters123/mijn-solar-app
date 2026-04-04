@@ -9,6 +9,7 @@ from datetime import datetime
 # SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
+# DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
 
@@ -28,7 +29,7 @@ if 'p_total' not in st.session_state:
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
-        val = abs(float(r.get('active_power_w', 0)))
+        val = abs(float(r['active_power_w']))
         return val, "🟢"
     except: return 0.0, "🔴"
 
@@ -37,7 +38,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records
+# Update records in geheugen
 if val_s > st.session_state.p_symo: st.session_state.p_symo = val_s
 if val_g > st.session_state.p_galvo: st.session_state.p_galvo = val_g
 if val_t > st.session_state.p_total: 
@@ -51,6 +52,7 @@ st.metric("🏆 All-time Record", f"{st.session_state.p_total:,.0f} W")
 
 st.divider()
 
+# Symo & Galvo live meters
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
@@ -63,32 +65,37 @@ with c2:
 
 st.divider()
 
-# --- TABEL SECTIE (HUFERPROOF FILTER) ---
+# --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
-
 try:
+    # Ophalen van data van Google Sheets
     response = requests.get(CSV_URL, timeout=5)
+    
     if response.status_code == 200:
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # We forceren de kolommen op basis van positie
-            clean_df = pd.DataFrame({
+            # Data voorbereiden: we pakken de eerste 4 kolommen
+            table_df = pd.DataFrame({
                 'Datum': df.iloc[:, 0].astype(str),
                 'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
                 'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
                 'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
-            })
+            }).dropna(subset=['Datum'])
             
-            # CRCIALE STAP: Verwijder rijen waar de data 'NaN' is (zoals regel 5 in je sheet)
-            clean_df = clean_df.dropna(subset=['Totaal (W)'])
-            
-            # Toon tabel (nieuwste boven)
-            st.dataframe(clean_df.iloc[::-1], use_container_width=True, hide_index=True)
+            # GEBRUIK DATAFRAME VOOR BETERE LEESBAARHEID
+            st.dataframe(
+                table_df.iloc[::-1], 
+                use_container_width=True, 
+                hide_index=True
+            )
+        else:
+            st.info("De spreadsheet is momenteel leeg.")
 except Exception:
-    st.info("De tabel wordt geladen...")
+    st.warning("Wacht op geldige data van de spreadsheet...")
 
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Auto-refresh elke 2 sec")
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 
+# Refresh pagina
 time.sleep(2)
 st.rerun()

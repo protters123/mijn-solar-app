@@ -97,7 +97,7 @@ if nu_lokaal.hour == 23:
         except: pass
 
 # --- UI DASHBOARD ---
-st.title("☀️ Solar Piek Pro") 
+st.title("☀️ Solar Piek") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", "3,729 W")
 

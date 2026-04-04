@@ -3,15 +3,15 @@ import requests
 import time
 import pandas as pd
 import io
-import os
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - HERSTEL & GEHEUGEN ☀️
+# SOLAR PIEK PRO - DE "RESTART" VERSIE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
+# Gebruik de meest directe export link
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -19,27 +19,10 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- PIEK GEHEUGEN FUNCTIES ---
-CACHE_FILE = "piek_geheugen.txt"
-
-def laad_pieken():
-    vandaag = datetime.now().strftime('%Y-%m-%d')
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                parts = f.read().split(",")
-                # Alleen laden als de datum in het bestand vandaag is
-                if parts[0] == vandaag:
-                    return float(parts[1]), float(parts[2]), float(parts[3])
-        except: pass
-    return 0.0, 0.0, 3729.0
-
-# Initialiseer sessie-geheugen
+# --- SIMPEL SESSIE GEHEUGEN ---
 if 'p_symo_peak' not in st.session_state:
-    s_c, g_c, t_c = laad_pieken()
-    st.session_state.p_symo_peak = s_c
-    st.session_state.p_galvo_peak = g_c
-    st.session_state.p_total_peak = t_c
+    st.session_state.p_symo_peak = 0.0
+    st.session_state.p_galvo_peak = 0.0
 
 def fetch_status(url):
     try:
@@ -47,33 +30,18 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA OPHALEN ---
+# --- LIVE DATA ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records en schrijf lokaal weg
-update_cache = False
-if val_s > st.session_state.p_symo_peak:
-    st.session_state.p_symo_peak = val_s
-    update_cache = True
-if val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_galvo_peak = val_g
-    update_cache = True
-if val_t > st.session_state.p_total_peak:
-    st.session_state.p_total_peak = val_t
-    update_cache = True
-    st.balloons()
+if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
+if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
 
-if update_cache:
-    vandaag = datetime.now().strftime('%Y-%m-%d')
-    with open(CACHE_FILE, "w") as f:
-        f.write(f"{vandaag},{st.session_state.p_symo_peak},{st.session_state.p_galvo_peak},{st.session_state.p_total_peak}")
-
-# --- UI DASHBOARD ---
+# --- UI ---
 st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-st.metric("🏆 All-time Record", f"{st.session_state.p_total_peak:,.0f} W")
+st.metric("🏆 All-time Record", "3,729 W") # Even hardcoded voor stabiliteit
 
 st.divider()
 
@@ -89,26 +57,20 @@ with c2:
 
 st.divider()
 
-# --- TABEL SECTIE ---
+# --- TABEL (PUUR EN SIMPEL) ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    response = requests.get(CSV_URL, timeout=5)
-    if response.status_code == 200:
-        df = pd.read_csv(io.StringIO(response.text))
-        if not df.empty:
-            table_df = pd.DataFrame({
-                'Datum': df.iloc[:, 0].astype(str),
-                'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
-                'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
-                'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
-            }).dropna(subset=['Datum'])
-            st.table(table_df.iloc[::-1])
+    # We proberen de data op te halen zonder cache of extra poeha
+    res = requests.get(CSV_URL, timeout=10)
+    if res.status_code == 200:
+        df = pd.read_csv(io.StringIO(res.text))
+        # Alleen de kolommen die we echt nodig hebben
+        st.table(df.iloc[::-1].head(10)) 
     else:
-        st.warning("Google Sheets is tijdelijk niet bereikbaar.")
-except:
-    st.info("Bezig met verbinden...")
+        st.error(f"Google geeft foutcode: {res.status_code}")
+except Exception as e:
+    st.warning("Kan de tabel niet laden. Controleer of de sheet op 'Openbaar' staat.")
 
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
-
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')}")
 time.sleep(2)
 st.rerun()

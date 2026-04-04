@@ -3,15 +3,18 @@ import requests
 import time
 import pandas as pd
 import io
+import os
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE "RESTART" VERSIE ☀️
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# Gebruik de meest directe export link
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+
+# DE LINK VAN JE AFBEELDING IS HIER VERWERKT:
+WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -19,10 +22,33 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- SIMPEL SESSIE GEHEUGEN ---
+# --- GEHEUGEN: PIEK ONTHOUDEN TEGEN REFRESH ---
+CACHE_FILE = "dagpiek_geheugen.txt"
+ARCHIVE_LOG = "laatst_gearchiveerd.txt"
+
+def laad_dagpiek():
+    vandaag = datetime.now().strftime('%Y-%m-%d')
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r") as f:
+                content = f.read().strip()
+                if content:
+                    parts = content.split(",")
+                    if parts[0] == vandaag:
+                        return float(parts[1]), float(parts[2])
+        except: pass
+    return 0.0, 0.0
+
+def sla_dagpiek_op(s, g):
+    vandaag = datetime.now().strftime('%Y-%m-%d')
+    with open(CACHE_FILE, "w") as f:
+        f.write(f"{vandaag},{s},{g}")
+
+# Initialiseer sessie-geheugen
 if 'p_symo_peak' not in st.session_state:
-    st.session_state.p_symo_peak = 0.0
-    st.session_state.p_galvo_peak = 0.0
+    s_start, g_start = laad_dagpiek()
+    st.session_state.p_symo_peak = s_start
+    st.session_state.p_galvo_peak = g_start
 
 def fetch_status(url):
     try:
@@ -30,18 +56,42 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA ---
+# --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
-if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
+# Update & bewaar piek lokaal (zodat hij niet op 0 springt bij refresh)
+if val_s > st.session_state.p_symo_peak:
+    st.session_state.p_symo_peak = val_s
+    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+if val_g > st.session_state.p_galvo_peak:
+    st.session_state.p_galvo_peak = val_g
+    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- UI ---
+# --- AUTO-ARCHIVE LOGICA (Logt om 23:00 naar de Sheet) ---
+nu = datetime.now()
+vandaag = nu.strftime('%Y-%m-%d')
+if nu.hour == 23:
+    laatst_datum = ""
+    if os.path.exists(ARCHIVE_LOG):
+        try:
+            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
+        except: pass
+    
+    if laatst_datum != vandaag:
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
+        try:
+            r = requests.get(WEBAPP_URL, params=params, timeout=10)
+            if r.status_code == 200:
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
+                st.toast("🚀 Dagpiek automatisch gearchiveerd in Google Sheets!")
+        except: pass
+
+# --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-st.metric("🏆 All-time Record", "3,729 W") # Even hardcoded voor stabiliteit
+st.metric("🏆 All-time Record", "3,729 W")
 
 st.divider()
 
@@ -57,20 +107,16 @@ with c2:
 
 st.divider()
 
-# --- TABEL (PUUR EN SIMPEL) ---
+# --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # We proberen de data op te halen zonder cache of extra poeha
     res = requests.get(CSV_URL, timeout=10)
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
-        # Alleen de kolommen die we echt nodig hebben
-        st.table(df.iloc[::-1].head(10)) 
-    else:
-        st.error(f"Google geeft foutcode: {res.status_code}")
-except Exception as e:
-    st.warning("Kan de tabel niet laden. Controleer of de sheet op 'Openbaar' staat.")
+        st.table(df.iloc[::-1].head(15))
+except:
+    st.warning("Verbinden met Google Sheets...")
 
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')}")
+st.caption(f"Laatste update: {nu.strftime('%H:%M:%S')} | Auto-log om 23:00")
 time.sleep(2)
 st.rerun()

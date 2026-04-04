@@ -5,9 +5,9 @@ import pandas as pd
 import io
 from datetime import datetime
 
-# CONFIG
+# DIT IS DE CORRECTE LINK VOOR EXPORT:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
 
 # INVERTERS
 PUBLIEK_IP = "94.110.235.108" 

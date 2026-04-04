@@ -6,24 +6,23 @@ import io
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
+# SOLAR PIEK PRO - UPDATE (BACK TO BASICS)
 # ==========================================
 
-# DE ENIGSTE CORRECTE LINK:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
-# INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- GEHEUGEN VOOR DE PIEK (SESSIE) ---
-if 'p_symo_max' not in st.session_state:
-    st.session_state.p_symo_max = 0.0
-    st.session_state.p_galvo_max = 0.0
+# --- RECORDS INITIALISEREN (Sessie-geheugen) ---
+if 'p_symo_peak' not in st.session_state:
+    st.session_state.p_symo_peak = 0.0
+    st.session_state.p_galvo_peak = 0.0
+    st.session_state.p_total_peak = 3717.0 
 
 def fetch_status(url):
     try:
@@ -37,12 +36,12 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update records in geheugen
-if val_s > st.session_state.p_symo_max: st.session_state.p_symo_max = val_s
-if val_g > st.session_state.p_galvo_max: st.session_state.p_galvo_max = val_g
+# Update Dagpieken in sessie
+if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
+if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
 
-# --- DATA LADEN ---
-all_time_rec = 3717.0
+# --- TABEL SECTIE & RECORD BEREKENING ---
+all_time_from_sheet = 3717.0
 table_df = pd.DataFrame()
 
 try:
@@ -50,42 +49,51 @@ try:
     if response.status_code == 200:
         df = pd.read_csv(io.StringIO(response.text))
         if not df.empty:
-            # Haal record uit kolom 4 (Totaal)
-            all_time_rec = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
+            # DIT IS DE ENIGE TOEVOEGING: Pak het hoogste getal uit de 4e kolom
+            all_time_from_sheet = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
+            
             table_df = pd.DataFrame({
                 'Datum': df.iloc[:, 0].astype(str),
                 'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
                 'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
                 'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
             }).dropna(subset=['Datum'])
-except: pass
+except:
+    pass
+
+# Update het record als de live-waarde hoger is dan de sheet
+current_record = max(all_time_from_sheet, val_t)
+if val_t > all_time_from_sheet and val_t > st.session_state.p_total_peak:
+    st.session_state.p_total_peak = val_t
+    st.balloons()
 
 # --- DASHBOARD UI ---
 st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-st.metric("🏆 All-time Record", f"{max(all_time_rec, val_t):,.0f} W")
+st.metric("🏆 All-time Record", f"{current_record:,.0f} W")
 
 st.divider()
 
-# Symo & Galvo live meters
+# Symo & Galvo live meters + Dagpieken
 c1, c2 = st.columns(2)
+
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.caption(f"Piek Vandaag: {st.session_state.p_symo_max:,.0f} W")
+    st.metric("Piek Vandaag", f"{st.session_state.p_symo_peak:,.0f} W")
+
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.caption(f"Piek Vandaag: {st.session_state.p_galvo_max:,.0f} W")
+    st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
 
-# --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1])
 else:
-    st.warning("Verbinden met Google Sheets...")
+    st.warning("Wacht op data...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

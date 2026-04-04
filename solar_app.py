@@ -11,7 +11,7 @@ from datetime import datetime
 
 # DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 # INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
@@ -68,14 +68,14 @@ st.divider()
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # Ophalen van data van Google Sheets
+    # Ophalen van data
     response = requests.get(CSV_URL, timeout=5)
     
     if response.status_code == 200:
         df = pd.read_csv(io.StringIO(response.text))
         
         if not df.empty:
-            # Data voorbereiden: we pakken de eerste 4 kolommen
+            # We pakken de eerste 4 kolommen op positie: 0=Datum, 1=Symo, 2=Galvo, 3=Totaal
             table_df = pd.DataFrame({
                 'Datum': df.iloc[:, 0].astype(str),
                 'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
@@ -83,8 +83,8 @@ try:
                 'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
             }).dropna(subset=['Datum'])
             
-            # GEBRUIK DATAFRAME VOOR BETERE LEESBAARHEID
-            st.dataframe(table_df.iloc[::-1],  use_container_width=True, hide_index=True)
+            # Sorteer: Nieuwste dag bovenaan
+            st.table(table_df.iloc[::-1])
         else:
             st.info("De spreadsheet is momenteel leeg.")
 except Exception:

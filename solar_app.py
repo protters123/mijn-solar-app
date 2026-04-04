@@ -22,7 +22,7 @@ st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="cent
 if 'p_symo_peak' not in st.session_state:
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
-    st.session_state.p_total_peak = 3717.0 # All-time record
+    st.session_state.p_total_peak = 3729.0 # All-time record
 
 def fetch_status(url):
     try:

@@ -5,13 +5,14 @@ import pandas as pd
 import io
 import os
 from datetime import datetime
-import pytz  # Nieuwe toevoeging voor de juiste tijdzone
+import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - TIJDZONE FIX ☀️
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+# De meest stabiele export link
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
@@ -21,13 +22,11 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- GEHEUGEN: PIEK ONTHOUDEN ---
-CACHE_FILE = "dagpiek_geheugen.txt"
-ARCHIVE_LOG = "laatst_gearchiveerd.txt"
-
-# Bepaal de juiste tijd voor NL/BE
+# --- TIJD EN GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
+CACHE_FILE = "dagpiek_geheugen.txt"
+ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
@@ -54,7 +53,7 @@ if 'p_symo_peak' not in st.session_state:
 
 def fetch_status(url):
     try:
-        r = requests.get(url, timeout=2).json()
+        r = requests.get(url, timeout=3).json()
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
@@ -70,7 +69,7 @@ if val_g > st.session_state.p_galvo_peak:
     st.session_state.p_galvo_peak = val_g
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-LOGICA (Logt om 23:00 ONZE tijd) ---
+# --- AUTO-LOG (23:00) ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
 if nu_lokaal.hour == 23:
     laatst_datum = ""
@@ -78,14 +77,13 @@ if nu_lokaal.hour == 23:
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
-    
     if laatst_datum != vandaag:
         params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=10)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
+                st.toast("🚀 Gearchiveerd!")
         except: pass
 
 # --- UI ---
@@ -107,15 +105,21 @@ with c2:
 
 st.divider()
 
+# --- TABEL SECTIE (VERBETERD) ---
 st.subheader("💚 Maandoverzicht") 
 try:
+    # Forceer herladen van Google data
     res = requests.get(CSV_URL, timeout=10)
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
-        st.table(df.iloc[::-1].head(12))
+        if not df.empty:
+            # Laatste 12 dagen, nieuwste eerst
+            st.table(df.iloc[::-1].head(12))
+    else:
+        st.warning("Google Sheet geeft geen data. Controleer of de sheet 'Openbaar' is.")
 except:
-    st.info("Tabel wordt geladen...")
+    st.info("Verbinden met Google Sheets...")
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
+st.caption(f"Tijd: {nu_lokaal.strftime('%H:%M:%S')} | Log: 23:00")
 time.sleep(2)
 st.rerun()

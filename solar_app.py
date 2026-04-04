@@ -6,20 +6,21 @@ import io
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - HERSTELDE VERSIE ☀️
+# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
 # ==========================================
 
+# DE ENIGSTE CORRECTE LINK:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# CORRECTE URL:
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
 
+# INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- GEHEUGEN VOOR DE DAGPIEK ---
+# --- GEHEUGEN VOOR DE PIEK (SESSIE) ---
 if 'p_symo_max' not in st.session_state:
     st.session_state.p_symo_max = 0.0
     st.session_state.p_galvo_max = 0.0
@@ -27,7 +28,8 @@ if 'p_symo_max' not in st.session_state:
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
-        return abs(float(r['active_power_w'])), "🟢"
+        val = abs(float(r['active_power_w']))
+        return val, "🟢"
     except: return 0.0, "🔴"
 
 # --- LIVE DATA OPHALEN ---
@@ -39,11 +41,7 @@ val_t = val_s + val_g
 if val_s > st.session_state.p_symo_max: st.session_state.p_symo_max = val_s
 if val_g > st.session_state.p_galvo_max: st.session_state.p_galvo_max = val_g
 
-# --- DASHBOARD UI ---
-st.title("☀️ Solar Piek Pro") 
-st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-
-# --- TABEL DATA LADEN VOOR ALL-TIME RECORD ---
+# --- DATA LADEN ---
 all_time_rec = 3717.0
 table_df = pd.DataFrame()
 
@@ -52,6 +50,7 @@ try:
     if response.status_code == 200:
         df = pd.read_csv(io.StringIO(response.text))
         if not df.empty:
+            # Haal record uit kolom 4 (Totaal)
             all_time_rec = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
             table_df = pd.DataFrame({
                 'Datum': df.iloc[:, 0].astype(str),
@@ -61,7 +60,11 @@ try:
             }).dropna(subset=['Datum'])
 except: pass
 
+# --- DASHBOARD UI ---
+st.title("☀️ Solar Piek Pro") 
+st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{max(all_time_rec, val_t):,.0f} W")
+
 st.divider()
 
 # Symo & Galvo live meters
@@ -69,11 +72,11 @@ c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.metric("Piek Vandaag", f"{st.session_state.p_symo_max:,.0f} W")
+    st.caption(f"Piek Vandaag: {st.session_state.p_symo_max:,.0f} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.metric("Piek Vandaag", f"{st.session_state.p_galvo_max:,.0f} W")
+    st.caption(f"Piek Vandaag: {st.session_state.p_galvo_max:,.0f} W")
 
 st.divider()
 
@@ -82,7 +85,7 @@ st.subheader("💚 Maandoverzicht")
 if not table_df.empty:
     st.table(table_df.iloc[::-1])
 else:
-    st.info("De tabel wordt geladen...")
+    st.warning("Verbinden met Google Sheets...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

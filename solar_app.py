@@ -5,15 +5,15 @@ import pandas as pd
 import io
 import os
 from datetime import datetime
-import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
+# SOLAR PIEK PRO - VOLAUTOMATISCH ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# De meest stabiele export link
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+
+# DE LINK VAN JE IMPLEMENTATIE:
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -22,14 +22,12 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- TIJD EN GEHEUGEN ---
-tz = pytz.timezone('Europe/Brussels')
-nu_lokaal = datetime.now(tz)
+# --- GEHEUGEN: PIEK ONTHOUDEN TEGEN REFRESH ---
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
 def laad_dagpiek():
-    vandaag = nu_lokaal.strftime('%Y-%m-%d')
+    vandaag = datetime.now().strftime('%Y-%m-%d')
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
@@ -42,10 +40,11 @@ def laad_dagpiek():
     return 0.0, 0.0
 
 def sla_dagpiek_op(s, g):
-    vandaag = nu_lokaal.strftime('%Y-%m-%d')
+    vandaag = datetime.now().strftime('%Y-%m-%d')
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag},{s},{g}")
 
+# --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak = s_start
@@ -53,40 +52,47 @@ if 'p_symo_peak' not in st.session_state:
 
 def fetch_status(url):
     try:
-        r = requests.get(url, timeout=3).json()
+        r = requests.get(url, timeout=2).json()
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA ---
+# --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
+# Update & bewaar piek lokaal tegen vergeten bij refresh
+update_cache = False
 if val_s > st.session_state.p_symo_peak:
     st.session_state.p_symo_peak = val_s
-    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+    update_cache = True
 if val_g > st.session_state.p_galvo_peak:
     st.session_state.p_galvo_peak = val_g
+    update_cache = True
+
+if update_cache:
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-LOG (23:00) ---
-vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
+# --- AUTO-LOGICA (OM 23:00 NAAR GOOGLE SHEETS) ---
+nu = datetime.now()
+vandaag = nu.strftime('%Y-%m-%d')
+if nu.hour == 23:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
+    
     if laatst_datum != vandaag:
         params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=10)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Gearchiveerd!")
+                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
         except: pass
 
-# --- UI ---
+# --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", "3,729 W")
@@ -105,21 +111,16 @@ with c2:
 
 st.divider()
 
-# --- TABEL SECTIE (VERBETERD) ---
+# --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
-    # Forceer herladen van Google data
     res = requests.get(CSV_URL, timeout=10)
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
-        if not df.empty:
-            # Laatste 12 dagen, nieuwste eerst
-            st.table(df.iloc[::-1].head(12))
-    else:
-        st.warning("Google Sheet geeft geen data. Controleer of de sheet 'Openbaar' is.")
+        st.table(df.iloc[::-1].head(12))
 except:
-    st.info("Verbinden met Google Sheets...")
+    st.info("Tabel wordt geladen...")
 
-st.caption(f"Tijd: {nu_lokaal.strftime('%H:%M:%S')} | Log: 23:00")
-time.sleep(2)
+st.caption(f"Update: {nu.strftime('%H:%M:%S')} | Auto-log om 23:00")
+time.sleep(1)
 st.rerun()

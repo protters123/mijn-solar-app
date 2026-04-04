@@ -11,7 +11,7 @@ from datetime import datetime
 
 # DE ENIGSTE CORRECTE LINK VOOR JOUW DATA:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
 # INVERTER IP'S
 PUBLIEK_IP = "94.110.235.108" 
@@ -31,8 +31,7 @@ def fetch_status(url):
         r = requests.get(url, timeout=2).json()
         val = abs(float(r['active_power_w']))
         return val, "🟢"
-    except: 
-        return 0.0, "🔴"
+    except: return 0.0, "🔴"
 
 # --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
@@ -68,26 +67,28 @@ st.divider()
 
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
-
-@st.cache_data(ttl=60)
-def load_data(url):
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            df = pd.read_csv(io.StringIO(response.text))
-            # Hernoem kolommen op basis van jouw screenshot
-            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
-            return df.iloc[::-1] # Nieuwste bovenaan
-    except:
-        return None
-    return None
-
-history_df = load_data(CSV_URL)
-
-if history_df is not None:
-    st.dataframe(history_df, use_container_width=True, hide_index=True)
-else:
-    st.warning("Wacht op geldige data... Controleer of de sheet op 'Iedereen met de link' staat.")
+try:
+    # Ophalen van data
+    response = requests.get(CSV_URL, timeout=5)
+    
+    if response.status_code == 200:
+        df = pd.read_csv(io.StringIO(response.text))
+        
+        if not df.empty:
+            # We pakken de eerste 4 kolommen op positie: 0=Datum, 1=Symo, 2=Galvo, 3=Totaal
+            table_df = pd.DataFrame({
+                'Datum': df.iloc[:, 0].astype(str),
+                'Symo (W)': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+                'Galvo (W)': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+                'Totaal (W)': pd.to_numeric(df.iloc[:, 3], errors='coerce')
+            }).dropna(subset=['Datum'])
+            
+            # Sorteer: Nieuwste dag bovenaan
+            st.table(table_df.iloc[::-1])
+        else:
+            st.info("De spreadsheet is momenteel leeg.")
+except Exception:
+    st.warning("Wacht op geldige data van de spreadsheet...")
 
 st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
 

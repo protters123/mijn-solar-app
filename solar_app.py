@@ -5,15 +5,14 @@ import pandas as pd
 import io
 import os
 from datetime import datetime
+import pytz  # Nieuwe toevoeging voor de juiste tijdzone
 
 # ==========================================
-# SOLAR PIEK PRO - VOLAUTOMATISCH ☀️
+# SOLAR PIEK PRO - TIJDZONE FIX ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-
-# DE LINK VAN JE IMPLEMENTATIE:
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -22,12 +21,16 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- GEHEUGEN: PIEK ONTHOUDEN TEGEN REFRESH ---
+# --- GEHEUGEN: PIEK ONTHOUDEN ---
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
+# Bepaal de juiste tijd voor NL/BE
+tz = pytz.timezone('Europe/Brussels')
+nu_lokaal = datetime.now(tz)
+
 def laad_dagpiek():
-    vandaag = datetime.now().strftime('%Y-%m-%d')
+    vandaag = nu_lokaal.strftime('%Y-%m-%d')
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
@@ -40,11 +43,10 @@ def laad_dagpiek():
     return 0.0, 0.0
 
 def sla_dagpiek_op(s, g):
-    vandaag = datetime.now().strftime('%Y-%m-%d')
+    vandaag = nu_lokaal.strftime('%Y-%m-%d')
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag},{s},{g}")
 
-# --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak = s_start
@@ -56,27 +58,21 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA OPHALEN ---
+# --- LIVE DATA ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update & bewaar piek lokaal tegen vergeten bij refresh
-update_cache = False
 if val_s > st.session_state.p_symo_peak:
     st.session_state.p_symo_peak = val_s
-    update_cache = True
+    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 if val_g > st.session_state.p_galvo_peak:
     st.session_state.p_galvo_peak = val_g
-    update_cache = True
-
-if update_cache:
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-LOGICA (OM 23:00 NAAR GOOGLE SHEETS) ---
-nu = datetime.now()
-vandaag = nu.strftime('%Y-%m-%d')
-if nu.hour == 23:
+# --- AUTO-LOGICA (Logt om 23:00 ONZE tijd) ---
+vandaag = nu_lokaal.strftime('%Y-%m-%d')
+if nu_lokaal.hour == 23:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
@@ -92,7 +88,7 @@ if nu.hour == 23:
                 st.toast("🚀 Dagpiek automatisch gearchiveerd!")
         except: pass
 
-# --- UI DASHBOARD ---
+# --- UI ---
 st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", "3,729 W")
@@ -111,7 +107,6 @@ with c2:
 
 st.divider()
 
-# --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 try:
     res = requests.get(CSV_URL, timeout=10)
@@ -121,6 +116,6 @@ try:
 except:
     st.info("Tabel wordt geladen...")
 
-st.caption(f"Update: {nu.strftime('%H:%M:%S')} | Auto-log om 23:00")
-time.sleep(1)
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
+time.sleep(2)
 st.rerun()

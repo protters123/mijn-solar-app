@@ -21,10 +21,25 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
 # --- RECORDS INITIALISEREN ---
+# --- RECORDS INITIALISEREN (SLIMMERE VERSIE) ---
 if 'p_total' not in st.session_state:
+    # We zetten tijdelijke startwaarden
     st.session_state.p_symo = 3711.0
     st.session_state.p_galvo = 6.0
     st.session_state.p_total = 3717.0
+
+    # UPDATE: We kijken nu direct in de ingeladen tabel voor het echte record
+    try:
+        response = requests.get(CSV_URL, timeout=5)
+        if response.status_code == 200:
+            df_init = pd.read_csv(io.StringIO(response.text))
+            # We pakken de hoogste waarde uit de 4e kolom (Totaal)
+            max_ooit = pd.to_numeric(df_init.iloc[:, 3], errors='coerce').max()
+            if max_ooit > st.session_state.p_total:
+                st.session_state.p_total = max_ooit
+    except:
+        pass
+
 
 def fetch_status(url):
     try:

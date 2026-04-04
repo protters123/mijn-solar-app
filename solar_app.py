@@ -7,13 +7,12 @@ import os
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - MET OPSLAAN FUNCTIE ☀️
+# SOLAR PIEK PRO - VOLAUTOMATISCH ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
-# JOUW PERSOONLIJKE GOOGLE SCRIPT URL:
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyGEe_-BSVg5o0f_5oR9hHXs2h8Qvtl172ojC-edFyXgGHMOG4h7zkSkXIxdZlyI_lG/exec"
+WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -21,8 +20,9 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- GEHEUGEN FUNCTIES (LOKAAL) ---
+# --- GEHEUGEN FUNCTIES ---
 CACHE_FILE = "piek_geheugen.txt"
+LOG_FILE = "laatst_gearchiveerd.txt"
 
 def laad_pieken():
     vandaag = datetime.now().strftime('%Y-%m-%d')
@@ -40,6 +40,35 @@ def sla_pieken_op(s, g, t):
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag},{s},{g},{t}")
 
+# --- AUTOMATISCH ARCHIVEREN LOGICA ---
+def check_automatische_archiveer():
+    nu = datetime.now()
+    vandaag = nu.strftime('%Y-%m-%d')
+    
+    # 1. Is het tussen 23:00 en 00:00?
+    if nu.hour == 23:
+        # 2. Hebben we vandaag al opgeslagen?
+        laatst_datum = ""
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r") as f:
+                laatst_datum = f.read().strip()
+        
+        if laatst_datum != vandaag:
+            # 3. Opslaan naar Google
+            params = {
+                "symo": int(st.session_state.p_symo_peak),
+                "galvo": int(st.session_state.p_galvo_peak)
+            }
+            try:
+                r = requests.get(WEBAPP_URL, params=params, timeout=10)
+                if r.status_code == 200:
+                    # Markeer als opgeslagen voor vandaag
+                    with open(LOG_FILE, "w") as f:
+                        f.write(vandaag)
+                    return True
+            except: pass
+    return False
+
 # Initialiseer geheugen
 if 'p_symo_peak' not in st.session_state:
     s_c, g_c, t_c = laad_pieken()
@@ -53,7 +82,7 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA ---
+# --- LIVE DATA & UPDATES ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
@@ -74,10 +103,16 @@ if val_t > st.session_state.p_total_peak:
 if update_needed:
     sla_pieken_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak)
 
+# Voer automatische check uit
+gearchiveerd = check_automatische_archiveer()
+
 # --- UI ---
 st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{st.session_state.p_total_peak:,.0f} W")
+
+if gearchiveerd:
+    st.toast("✅ Dagpiek automatisch gearchiveerd in Google Sheets!")
 
 st.divider()
 
@@ -90,26 +125,6 @@ with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
-
-st.divider()
-
-# --- NIEUW: OPSLAAN NAAR GOOGLE SHEETS KNOP ---
-st.subheader("💾 Data Opslaan")
-if st.button("Sla Dagpiek op in Google Sheet"):
-    with st.spinner("Bezig met opslaan..."):
-        params = {
-            "symo": int(st.session_state.p_symo_peak),
-            "galvo": int(st.session_state.p_galvo_peak)
-        }
-        try:
-            r = requests.get(WEBAPP_URL, params=params, timeout=10)
-            if r.status_code == 200:
-                st.success(f"✅ Opgeslagen! Symo: {params['symo']}W | Galvo: {params['galvo']}W")
-                time.sleep(2)
-            else:
-                st.error("Fout bij Google Script. Controleer je implementatie.")
-        except:
-            st.error("Kon geen verbinding maken met Google Script.")
 
 st.divider()
 
@@ -130,6 +145,6 @@ try:
 except:
     st.info("Tabel wordt geladen...")
 
-st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Verversing elke 2 sec")
+st.caption(f"Update: {datetime.now().strftime('%H:%M:%S')} | Auto-archive om 23:00")
 time.sleep(2)
 st.rerun()

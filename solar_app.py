@@ -7,13 +7,13 @@ import os
 from datetime import datetime
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
+# SOLAR PIEK PRO - VOLAUTOMATISCH ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
-# DE LINK VAN JE AFBEELDING IS HIER VERWERKT:
+# PLAK HIER DE GEKOPIEERDE URL VAN JE SCHERM:
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -22,7 +22,7 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-# --- GEHEUGEN: PIEK ONTHOUDEN TEGEN REFRESH ---
+# --- GEHEUGEN: PIEK ONTHOUDEN ---
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
@@ -31,11 +31,9 @@ def laad_dagpiek():
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
-                content = f.read().strip()
-                if content:
-                    parts = content.split(",")
-                    if parts[0] == vandaag:
-                        return float(parts[1]), float(parts[2])
+                parts = f.read().split(",")
+                if parts[0] == vandaag:
+                    return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
 
@@ -61,7 +59,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update & bewaar piek lokaal (zodat hij niet op 0 springt bij refresh)
+# Update & bewaar piek lokaal tegen vergeten bij refresh
 if val_s > st.session_state.p_symo_peak:
     st.session_state.p_symo_peak = val_s
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
@@ -69,15 +67,13 @@ if val_g > st.session_state.p_galvo_peak:
     st.session_state.p_galvo_peak = val_g
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVE LOGICA (Logt om 23:00 naar de Sheet) ---
+# --- AUTO-LOGICA (ARCHIVEREN OM 23:00) ---
 nu = datetime.now()
 vandaag = nu.strftime('%Y-%m-%d')
 if nu.hour == 23:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
-        try:
-            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
-        except: pass
+        with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
     
     if laatst_datum != vandaag:
         params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
@@ -85,7 +81,7 @@ if nu.hour == 23:
             r = requests.get(WEBAPP_URL, params=params, timeout=10)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Dagpiek automatisch gearchiveerd in Google Sheets!")
+                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
@@ -117,6 +113,6 @@ try:
 except:
     st.warning("Verbinden met Google Sheets...")
 
-st.caption(f"Laatste update: {nu.strftime('%H:%M:%S')} | Auto-log om 23:00")
+st.caption(f"Update: {nu.strftime('%H:%M:%S')} | Auto-log om 23:00")
 time.sleep(2)
 st.rerun()

@@ -84,11 +84,7 @@ try:
             }).dropna(subset=['Datum'])
             
             # GEBRUIK DATAFRAME VOOR BETERE LEESBAARHEID
-            st.dataframe(
-                table_df.iloc[::-1], 
-                use_container_width=True, 
-                hide_index=True
-            )
+            st.dataframe(table_df.iloc[::-1],  use_container_width=True, hide_index=True)
         else:
             st.info("De spreadsheet is momenteel leeg.")
 except Exception:

@@ -6,8 +6,10 @@ import io
 from datetime import datetime
 
 # DIT IS DE CORRECTE LINK VOOR EXPORT:
+# DEZE LINK MOET PRECIES ZO ZIJN:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"docs.google.com{SHEET_ID}/export?format=csv"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
+
 
 # INVERTERS
 PUBLIEK_IP = "94.110.235.108" 

@@ -5,10 +5,9 @@ import pandas as pd
 import io
 from datetime import datetime
 
-# VERVANG REGEL 8 T/M 10 DOOR DIT:
+# DIT IS DE EXACTE FIX VOOR REGEL 8 T/M 11:
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# Let op de /d/ en de https://google.com
-CSV_URL = f"https://google.comspreadsheets/d/{SHEET_ID}/import?format=csv"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv"
 
 
 # INVERTERS

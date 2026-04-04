@@ -122,5 +122,5 @@ except:
     st.info("Tabel wordt geladen...")
 
 st.caption(f"Update: {nu.strftime('%H:%M:%S')} | Auto-log om 23:00")
-time.sleep(1)
+time.sleep(0,1)
 st.rerun()

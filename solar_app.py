@@ -90,7 +90,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 
 # --- AUTO-ARCHIVEREN OM 23:00 ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
+if nu_lokaal.hour == 21:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
@@ -110,7 +110,7 @@ if nu_lokaal.hour == 23:
         except: pass
 
 # --- UI DASHBOARD ---
-st.title("☀️ Solar Piek Pro") 
+st.title("☀️ Solar Piek") 
 
 forecast = get_weather_forecast()
 if forecast:

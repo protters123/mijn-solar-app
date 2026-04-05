@@ -8,14 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - UPDATE 14:15 ☀️
+# SOLAR PIEK PRO - UPDATE 14:20 ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# Gecorrigeerde URL om je tabel weer te kunnen laden
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
+WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -57,7 +56,7 @@ def laad_dagpiek():
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    if parts[0] == vandaag_iso:
+                    if len(parts) == 3 and parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
@@ -85,9 +84,9 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN ---
+# --- AUTO-ARCHIVEREN (Trigger 14:20) ---
 target_uur = 14
-target_min = 15
+target_min = 20
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
@@ -103,12 +102,12 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Dagpiek gearchiveerd!")
+                st.toast("🚀 Gearchiveerd naar Sheet!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-# Hier staat de aangepaste regel
+# DIT IS DE REGEL DIE JE WILT ZIEN:
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 forecast = get_weather_forecast()
@@ -137,11 +136,9 @@ st.divider()
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
-    st.metric("Nu", f"{val_s:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_symo_peak:,.0f} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
-    st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
@@ -149,6 +146,6 @@ st.subheader("💚 Maandoverzicht")
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)
 st.rerun()

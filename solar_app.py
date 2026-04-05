@@ -27,14 +27,16 @@ st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="cent
 # --- WEER FUNCTIE ---
 def get_weather():
     try:
-        # Haalt huidige temp, weercode en dag-max op
-        url = f"https://open-meteo.com{LAT}&longitude={LON}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max&timezone=Europe%2FBerlin&forecast_days=1"
-        r = requests.get(url, timeout=3).json()
-        temp = r['current']['temperature_2m']
-        code = r['current']['weather_code']
-        max_temp = r['daily']['temperature_2m_max'][0]
+        # Toegevoegd: Verifieer of de URL bereikbaar is zonder SSL-fout
+        url = f"https://open-meteo.com{LAT}&longitude={LON}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max&timezone=auto&forecast_days=1"
+        r = requests.get(url, timeout=5)
+        r.raise_for_status() # Geeft fout bij 400 of 500 error
+        data = r.json()
         
-        # Mapping van codes naar iconen en tekst
+        temp = data['current']['temperature_2m']
+        code = data['current']['weather_code']
+        max_temp = data['daily']['temperature_2m_max'][0] # Pak het eerste element
+        
         weather_map = {
             0: ("☀️", "Onbewolkt"), 1: ("🌤️", "Licht bewolkt"), 2: ("⛅", "Half bewolkt"), 
             3: ("☁️", "Zwaar bewolkt"), 45: ("🌫️", "Mist"), 51: ("🌦️", "Lichte motregen"), 
@@ -42,8 +44,11 @@ def get_weather():
         }
         icoon, tekst = weather_map.get(code, ("☁️", "Bewolkt"))
         return temp, icoon, max_temp, tekst
-    except:
-        return "--", "🌡️", "--", "Geen data"
+    except Exception as e:
+        # Dit helpt bij het debuggen: het laat de fout zien in de console
+        print(f"Weerfout: {e}")
+        return "Fout", "⚠️", "Fout", "Verbinding mislukt"
+
 
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')

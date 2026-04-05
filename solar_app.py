@@ -27,19 +27,7 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER FUNCTIES (Tongeren-Borgloon) ---
-@st.cache_data(ttl=3600)
-def get_weather_forecast():
-    try:
-        # Locatie Tongeren: lat 50.78, lon 5.46
-        url = "https://open-meteo.com"
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200:
-            return r.json()["daily"]
-        return None
-    except:
-        return None
-
+# --- WEER INTERPRETATIE (Zon, Regen, Mist, etc.) ---
 def vertaal_weer(code):
     mapping = {
         0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
@@ -48,16 +36,27 @@ def vertaal_weer(code):
     }
     return mapping.get(code, ("Variabel", "🌡️"))
 
+@st.cache_data(ttl=3600)
+def get_weather_forecast():
+    try:
+        # Exact de URL van jouw screenshot (Tongeren-Borgloon)
+        url = "https://open-meteo.com"
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            return r.json()["daily"]
+        return None
+    except:
+        return None
+
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
                 content = f.read().strip()
-                if content:
+                if content and content.split(",")[0] == vandaag:
                     parts = content.split(",")
-                    if parts[0] == vandaag:
-                        return float(parts[1]), float(parts[2])
+                    return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
 
@@ -69,28 +68,13 @@ def sla_dagpiek_op(s, g):
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
-    st.session_state.p_symo_peak = s_start
-    st.session_state.p_galvo_peak = g_start
-if 'record_celebrated' not in st.session_state:
-    st.session_state.record_celebrated = False
+    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
 
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
-
-# --- DATA LADEN ---
-historical_max = 3729.0
-table_df = pd.DataFrame()
-try:
-    res = requests.get(CSV_URL, timeout=10)
-    if res.status_code == 200:
-        df = pd.read_csv(io.StringIO(res.text))
-        if not df.empty:
-            historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
-            table_df = df
-except: pass
 
 # --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
@@ -105,25 +89,21 @@ sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- DE WEER-SECTIE (NU ECHT GEFIXT) ---
+# --- DE WEER-SECTIE (FIXED) ---
 forecast = get_weather_forecast()
 if forecast:
-    # CRUCIAAL: Gebruik [0] om de eerste waarde uit de lijst te pakken
-    w_code = forecast['weather_code'][0]
-    w_tekst, w_icoon = vertaal_weer(w_code)
+    # We pakken het EERSTE item [0] uit de lijsten die de weerdienst stuurt
+    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
     t_max = forecast['temperature_2m_max'][0]
     z_straling = forecast['shortwave_radiation_sum'][0]
     
     st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 else:
-    st.error("Weergegevens tijdelijk niet beschikbaar.")
+    st.error("Weergegevens konden niet worden geladen.")
 
 st.divider()
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-current_all_time = max(historical_max, val_t)
-st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
-
 st.divider()
 
 c1, c2 = st.columns(2)
@@ -136,13 +116,6 @@ with c2:
     st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
-st.divider()
-
-# --- TABEL SECTIE ---
-st.subheader("💚 Maandoverzicht") 
-if not table_df.empty:
-    st.table(table_df.iloc[::-1].head(15))
-
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
+st.caption(f"Laatste update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)
 st.rerun()

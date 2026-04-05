@@ -90,8 +90,8 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- AUTO-ARCHIVEREN LOGICA (13:52) ---
-target_uur = 13
-target_min = 52
+target_uur = 14
+target_min = 04
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""

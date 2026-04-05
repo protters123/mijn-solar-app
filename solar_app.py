@@ -26,13 +26,13 @@ tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 
-# --- WEER INTERPRETATIE (Iconen & Tekst) ---
-def vertaal_weer(code):
+# --- WEER INTERPRETATIE (Zon, Regen, Mist, etc.) ---
+def get_weather_info(code):
     mapping = {
-        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 48: ("Rijpende mist", "🌫️"),
+        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 3: ("Bewolkt", "☁️"),
+        45: ("Mistig", "🌫️"), 48: ("Rijpende mist", "🌫️"),
         51: ("Motregen", "🌦️"), 61: ("Regen", "🌧️"), 63: ("Matige regen", "🌧️"),
-        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
+        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⚡")
     }
     return mapping.get(code, ("Onbekend", "🌡️"))
 
@@ -42,8 +42,11 @@ def get_weather_forecast():
         # Locatie: Tongeren-Borgloon
         url = "https://open-meteo.com"
         r = requests.get(url, timeout=10)
-        return r.json()["daily"] if r.status_code == 200 else None
-    except: return None
+        if r.status_code == 200:
+            return r.json()["daily"]
+        return None
+    except:
+        return None
 
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
@@ -51,19 +54,22 @@ def laad_dagpiek():
         try:
             with open(CACHE_FILE, "r") as f:
                 content = f.read().strip()
-                if content and content.split(",")[0] == vandaag:
+                if content:
                     parts = content.split(",")
-                    return float(parts[1]), float(parts[2])
+                    if parts[0] == vandaag:
+                        return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
 
 def sla_dagpiek_op(s, g):
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
-    with open(CACHE_FILE, "w") as f: f.write(f"{vandaag},{s},{g}")
+    with open(CACHE_FILE, "w") as f:
+        f.write(f"{vandaag},{s},{g}")
 
-# --- INITIALISEREN & FETCH ---
+# --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
-    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = laad_dagpiek()
+    s_start, g_start = laad_dagpiek()
+    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
 
 def fetch_status(url):
     try:
@@ -84,14 +90,17 @@ sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- WEER APP SECTIE (FIXED) ---
+# --- GECORRIGEERDE WEER SECTIE ---
 forecast = get_weather_forecast()
 if forecast:
-    # Cruciaal: [0] pakt de gegevens van vandaag
-    weer_tekst, weer_icoon = vertaal_weer(forecast['weather_code'][0])
-    st.info(f"**Weer in Tongeren:** {weer_icoon} {weer_tekst} | 🌡️ {forecast['temperature_2m_max'][0]}°C | ☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
+    # Hier zit de fix: pak de EERSTE dag [0] uit de lijst
+    desc_v, icon_v = get_weather_info(forecast['weather_code'][0])
+    temp_v = forecast['temperature_2m_max'][0]
+    zon_v = forecast['shortwave_radiation_sum'][0]
+    
+    st.info(f"**Weer in Tongeren:** {icon_v} {desc_v} | 🌡️ {temp_v}°C | ☀️ {zon_v} MJ/m²")
 else:
-    st.warning("Weergegevens tijdelijk niet beschikbaar.")
+    st.error("Weergegevens konden niet worden geladen.")
 
 st.divider()
 

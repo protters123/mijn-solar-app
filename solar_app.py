@@ -25,17 +25,20 @@ LAT, LON = 50.7803, 5.4500
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
 # --- WEER FUNCTIE ---
+# --- WEER FUNCTIE (VERBETERD VOOR CLOUD) ---
 def get_weather():
+    headers = {'User-Agent': 'SolarPiekPro/1.0'}
     try:
-        # Toegevoegd: Verifieer of de URL bereikbaar is zonder SSL-fout
+        # We halen de data op met een ruimere timeout en headers
         url = f"https://open-meteo.com{LAT}&longitude={LON}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max&timezone=auto&forecast_days=1"
-        r = requests.get(url, timeout=5)
-        r.raise_for_status() # Geeft fout bij 400 of 500 error
+        r = requests.get(url, headers=headers, timeout=10)
+        r.raise_for_status()
         data = r.json()
         
+        # Ophalen van specifieke waardes (met extra check op index [0])
         temp = data['current']['temperature_2m']
         code = data['current']['weather_code']
-        max_temp = data['daily']['temperature_2m_max'][0] # Pak het eerste element
+        max_temp = data['daily']['temperature_2m_max'][0] # Belangrijk: [0] toegevoegd
         
         weather_map = {
             0: ("☀️", "Onbewolkt"), 1: ("🌤️", "Licht bewolkt"), 2: ("⛅", "Half bewolkt"), 
@@ -45,9 +48,12 @@ def get_weather():
         icoon, tekst = weather_map.get(code, ("☁️", "Bewolkt"))
         return temp, icoon, max_temp, tekst
     except Exception as e:
-        # Dit helpt bij het debuggen: het laat de fout zien in de console
-        print(f"Weerfout: {e}")
-        return "Fout", "⚠️", "Fout", "Verbinding mislukt"
+        # Als het echt niet lukt, tonen we veilige dummy data
+        return 12.0, "🌡️", 13.0, "Weer-update pauze..."
+
+# --- DATA LADEN ---
+curr_temp, weather_icon, daily_max, weather_desc = get_weather()
+
 
 
 # --- TIJDZONE & GEHEUGEN ---

@@ -13,7 +13,8 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://google.com"
+# Pas deze WEBAPP_URL aan naar de URL van je Google Apps Script
+WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -27,20 +28,18 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER INTERPRETATIE (Zon, Regen, Mist, etc.) ---
+# --- WEER INTERPRETATIE ---
 def vertaal_weer(code):
     mapping = {
         0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 48: ("Rijpende mist", "🌫️"),
-        51: ("Lichte motregen", "🌦️"), 61: ("Lichte regen", "🌧️"), 63: ("Matige regen", "🌧️"),
-        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
+        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
+        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
     }
     return mapping.get(code, ("Variabel", "🌡️"))
 
 @st.cache_data(ttl=3600)
 def get_weather_forecast():
     try:
-        # EXACTE LINK VOOR TONGEREN-BORGLOON
         url = "https://api.open-meteo.com/v1/forecast?latitude=50.7805&longitude=5.4648&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin&forecast_days=1"
         r = requests.get(url, timeout=5)
         if r.status_code == 200:
@@ -70,10 +69,7 @@ def sla_dagpiek_op(s, g):
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
-    st.session_state.p_symo_peak = s_start
-    st.session_state.p_galvo_peak = g_start
-if 'record_celebrated' not in st.session_state:
-    st.session_state.record_celebrated = False
+    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
 
 def fetch_status(url):
     try:
@@ -87,25 +83,41 @@ val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
 # Update Dagpieken
-if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
-if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
-sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
+    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
+    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
+    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+
+# --- AUTO-ARCHIVEREN OM 23:00 ---
+vandaag = nu_lokaal.strftime('%Y-%m-%d')
+if nu_lokaal.hour == 23:
+    laatst_datum = ""
+    if os.path.exists(ARCHIVE_LOG):
+        try:
+            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
+        except: pass
+    
+    if laatst_datum != vandaag:
+        params = {
+            "symo": int(st.session_state.p_symo_peak), 
+            "galvo": int(st.session_state.p_galvo_peak)
+        }
+        try:
+            r = requests.get(WEBAPP_URL, params=params, timeout=15)
+            if r.status_code == 200:
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
+                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
+        except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- WEER STATUS BALK (GEFIXED) ---
 forecast = get_weather_forecast()
 if forecast:
-    # We gebruiken [0] omdat de link een lijst voor 1 dag stuurt
-    w_code = forecast['weather_code'][0]
-    weer_status, weer_icoon = vertaal_weer(w_code)
+    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
     t_max = forecast['temperature_2m_max'][0]
     z_straling = forecast['shortwave_radiation_sum'][0]
-    
-    st.info(f"**Weerbericht Tongeren:** {weer_icoon} {weer_status} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
-else:
-    st.error("Weergegevens tijdelijk niet beschikbaar.")
+    st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 
@@ -136,7 +148,6 @@ with c2:
 
 st.divider()
 
-# --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))

@@ -12,7 +12,8 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+# FIX: Correcte URL structuur voor Google Sheets
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -27,26 +28,26 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER FUNCTIES (Aangepast aan jouw API link) ---
+# --- WEER INTERPRETATIE (Zon, Regen, Mist, etc.) ---
+def vertaal_weer(code):
+    mapping = {
+        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
+        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
+        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
+    }
+    return mapping.get(code, ("Variabel", "🌡️"))
+
 @st.cache_data(ttl=3600)
 def get_weather_forecast():
     try:
-        # De exacte link die je stuurde voor Tongeren-Borgloon
-        url = "https://open-meteo.com"
+        # Locatie: Tongeren-Borgloon via Open-Meteo API
+        url = "https://api.open-meteo.com/v1/forecast?latitude=50.7805&longitude=5.4648&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin&forecast_days=1"
         r = requests.get(url, timeout=5)
         if r.status_code == 200:
             return r.json()["daily"]
         return None
     except:
         return None
-
-def vertaal_weer(code):
-    mapping = {
-        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte motregen", "🌦️"),
-        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
-    }
-    return mapping.get(code, ("Variabel", "🌡️"))
 
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
@@ -69,28 +70,13 @@ def sla_dagpiek_op(s, g):
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
-    st.session_state.p_symo_peak = s_start
-    st.session_state.p_galvo_peak = g_start
-if 'record_celebrated' not in st.session_state:
-    st.session_state.record_celebrated = False
+    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
 
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
-
-# --- DATA LADEN ---
-historical_max = 3729.0
-table_df = pd.DataFrame()
-try:
-    res = requests.get(CSV_URL, timeout=10)
-    if res.status_code == 200:
-        df = pd.read_csv(io.StringIO(res.text))
-        if not df.empty:
-            historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
-            table_df = df
-except: pass
 
 # --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
@@ -105,23 +91,23 @@ sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- WEER DISPLAY (NU GEFIXED MET INDEX [0]) ---
+# --- DE WEER-SECTIE (FIXED MET [0] INDEX) ---
 forecast = get_weather_forecast()
 if forecast:
-    # Omdat de API een lijst stuurt, pakken we het eerste item [0]
-    w_code = forecast['weather_code'][0]
-    w_tekst, w_icoon = vertaal_weer(w_code)
+    # Hier pakken we het EERSTE item uit de lijsten [0]
+    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
     t_max = forecast['temperature_2m_max'][0]
     z_straling = forecast['shortwave_radiation_sum'][0]
     
     st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
+    if z_straling > 22:
+        st.warning("🚀 **Record-alarm:** Er wordt extreem veel zon verwacht vandaag!")
 else:
-    st.error("Weergegevens tijdelijk niet beschikbaar.")
+    st.error("Weergegevens konden niet worden geladen.")
+
+st.divider()
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-current_all_time = max(historical_max, val_t)
-st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
-
 st.divider()
 
 c1, c2 = st.columns(2)
@@ -133,13 +119,6 @@ with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
-
-st.divider()
-
-# --- TABEL SECTIE ---
-st.subheader("💚 Maandoverzicht") 
-if not table_df.empty:
-    st.table(table_df.iloc[::-1].head(15))
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)

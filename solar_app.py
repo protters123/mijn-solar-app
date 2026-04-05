@@ -27,13 +27,19 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER FUNCTIE (Regio Tongeren-Borgloon) ---
+# --- WEER FUNCTIE (Tongeren-Borgloon) ---
 @st.cache_data(ttl=3600)
 def get_weather_forecast(lat=50.78, lon=5.41):
     try:
-        url = f"https://open-meteo.com{lat}&longitude={lon}&daily=temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin"
-        r = requests.get(url, timeout=5).json()
-        return r['daily']
+        url = "https://open-meteo.com"
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "daily": ["temperature_2m_max", "shortwave_radiation_sum"],
+            "timezone": "Europe/Berlin"
+        }
+        r = requests.get(url, params=params, timeout=5)
+        return r.json()["daily"]
     except:
         return None
 
@@ -81,12 +87,11 @@ try:
             table_df = df
 except: pass
 
-# --- LIVE DATA OPHALEN ---
+# --- LIVE DATA ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
@@ -95,22 +100,14 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# Record Check
-current_all_time = max(historical_max, val_t)
-if val_t > historical_max and not st.session_state.record_celebrated:
-    st.balloons()
-    st.session_state.record_celebrated = True
-elif val_t <= historical_max:
-    st.session_state.record_celebrated = False
-
-# Weer ophalen voor waarschuwing
+# Record Waarschuwing op basis van weer
 forecast = get_weather_forecast()
 if forecast:
-    solar_vandaag = forecast['shortwave_radiation_sum'][0]
-    if solar_vandaag > 22:
-        st.warning(f"🔥 **RECORD ALARM:** Vandaag wordt extreem veel zon verwacht ({solar_vandaag} MJ/m²). Maak je borst maar nat!")
+    if forecast['shortwave_radiation_sum'][0] > 22:
+        st.warning(f"🔥 **RECORD ALARM:** Vandaag extreme zon voorspeld ({forecast['shortwave_radiation_sum'][0]} MJ/m²)!")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
+current_all_time = max(historical_max, val_t)
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
 
 st.divider()
@@ -127,28 +124,16 @@ with c2:
 
 st.divider()
 
-# --- WEERSVOORSPELLING MET KLEUR-LOGICA ---
+# --- WEERSVOORSPELLING SECTIE ---
 st.subheader("🌤️ Weersverwachting (Regio Tongeren)")
 if forecast:
     wf1, wf2 = st.columns(2)
-    
-    # Vandaag
     with wf1:
-        color_v = "orange" if forecast['shortwave_radiation_sum'][0] > 18 else "int"
-        label_v = "☀️ Zonnig" if forecast['shortwave_radiation_sum'][0] > 18 else "☁️ Bewolkt/Variabel"
-        if color_v == "orange":
-            st.success(f"**Vandaag** ({label_v})\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
-        else:
-            st.info(f"**Vandaag** ({label_v})\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
-            
-    # Morgen
+        sol_v = forecast['shortwave_radiation_sum'][0]
+        st.info(f"**Vandaag**\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {sol_v} MJ/m²")
     with wf2:
-        color_m = "orange" if forecast['shortwave_radiation_sum'][1] > 18 else "int"
-        label_m = "☀️ Zonnig" if forecast['shortwave_radiation_sum'][1] > 18 else "☁️ Bewolkt/Variabel"
-        if color_m == "orange":
-            st.success(f"**Morgen** ({label_m})\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][1]} MJ/m²")
-        else:
-            st.info(f"**Morgen** ({label_m})\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][1]} MJ/m²")
+        sol_m = forecast['shortwave_radiation_sum'][1]
+        st.info(f"**Morgen**\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {sol_m} MJ/m²")
 else:
     st.error("Weergegevens konden niet worden geladen.")
 

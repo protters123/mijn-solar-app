@@ -89,16 +89,19 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- AUTO-ARCHIVEREN OM 23:00 ---
-# --- TIJDELIJKE TEST LOGICA (vandaag om 12:55) ---
+# --- TIJDELIJKE TEST LOGICA (vandaag om 13:05) ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
+huidig_uur = nu_lokaal.hour
+huidige_minuut = nu_lokaal.minute
 
-# VERBETERD: nu_lokaal.minute in plaats van .min
-if nu_lokaal.hour == 12 and nu_lokaal.minute == 51:
-    laatst_datum = ""
+# DEBUG: Dit verschijnt op je scherm zodat je de tijd kunt zien
+st.write(f"Systeem check: {huidig_uur}:{huidige_minuut} (Wacht op 13:05)")
+
+if huidig_uur == 13 and huidige_minuut == 5:
     if os.path.exists(ARCHIVE_LOG):
-        try:
-            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
-        except: pass
+        with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
+    else:
+        laatst_datum = ""
     
     if laatst_datum != vandaag:
         params = {
@@ -106,15 +109,16 @@ if nu_lokaal.hour == 12 and nu_lokaal.minute == 51:
             "galvo": int(st.session_state.p_galvo_peak)
         }
         try:
-            # We sturen de data naar je Script URL
+            # We voeren de aanroep uit
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 TEST: Dagpiek succesvol gearchiveerd!")
+                st.balloons() # Extra visuele check
+                st.success("✅ Verzonden naar Google Sheets!")
+            else:
+                st.error(f"Google Sheet weigert: Code {r.status_code}")
         except Exception as e:
-            st.error(f"Fout bij archiveren: {e}")
-
-
+            st.error(f"Verbindingsfout: {e}")
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 

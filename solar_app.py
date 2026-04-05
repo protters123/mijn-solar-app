@@ -8,14 +8,14 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - DE DEFINITIEVE FIX ☀️
+# SOLAR PIEK PRO - VOLLEDIGE INTEGRATIE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
-# PLAK HIER DE MIDDELSTE URL VAN JE SCHERM:
-WEBAPP_URL = "https://google.com"
+# JOUW PERSOONLIJKE WEB APP URL:
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyGEe_-BSVg5o0f_5oR9hHXs2h8Qvtl172ojC-edFyXgGHMOG4h7zkSkXIxdZlyI_lG/exec"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -34,9 +34,11 @@ def laad_dagpiek():
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
-                parts = f.read().split(",")
-                if parts[0] == vandaag:
-                    return float(parts[1]), float(parts[2])
+                content = f.read().strip()
+                if content:
+                    parts = content.split(",")
+                    if parts[0] == vandaag:
+                        return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
 
@@ -61,6 +63,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
+# Update dagpiek in geheugen
 if val_s > st.session_state.p_symo_peak:
     st.session_state.p_symo_peak = val_s
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
@@ -90,7 +93,7 @@ if nu_lokaal.hour == 23:
 st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 
-# All-time Record berekenen uit tabel
+# All-time Record berekenen
 historical_max = 3729.0
 try:
     res = requests.get(CSV_URL, timeout=5)
@@ -100,12 +103,14 @@ except: pass
 
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 
-# --- TIJDELIJKE TEST-KNOP ---
+# --- TEST KNOP (MAG JE LATER WEGHALEN) ---
 if st.button("🧪 TEST: Sla nu op in Google Sheet"):
     params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
-    r = requests.get(WEBAPP_URL, params=params)
-    if r.status_code == 200: st.success("✅ Het werkt! Check je Sheet.")
-    else: st.error("❌ Fout. Check je Google Script implementatie.")
+    try:
+        r = requests.get(WEBAPP_URL, params=params)
+        if r.status_code == 200: st.success("✅ Het werkt! Check je Sheet.")
+        else: st.error("❌ Fout bij Google Script.")
+    except: st.error("Kon geen verbinding maken.")
 
 st.divider()
 
@@ -126,7 +131,7 @@ st.subheader("💚 Maandoverzicht")
 try:
     res = requests.get(CSV_URL, timeout=10)
     df = pd.read_csv(io.StringIO(res.text))
-    st.table(df.iloc[::-1].head(12))
+    st.table(df.iloc[::-1].head(15))
 except:
     st.info("Tabel wordt geladen...")
 

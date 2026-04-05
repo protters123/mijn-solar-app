@@ -95,7 +95,7 @@ huidig_uur = nu_lokaal.hour
 huidige_minuut = nu_lokaal.minute
 
 # FIX 2: Testtijd op 13:35 zetten (daarna weer terug naar 23:00)
-if huidig_uur == 13 and huidige_minuut == 35:
+if huidig_uur == 20 and huidige_minuut == 30:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:

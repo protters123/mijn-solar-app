@@ -14,7 +14,7 @@ import pytz
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 # Pas deze WEBAPP_URL aan naar de URL van je Google Apps Script
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw2FVnk85VhZqhr_QL7e-nN_KRVSxiVVVrDrkOdYQYK5QPDa-wWe9bUaocstvH0mrsQ/exec" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxwClGZryn1ZbtLWqAQs5LF98WVm0ANb5rOyjgbYG9xQXHEjfgWG5RUbfXGXf8B4Xbb/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -93,7 +93,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
 
 # VERBETERD: nu_lokaal.minute in plaats van .min
-if nu_lokaal.hour == 12 and nu_lokaal.minute == 49:
+if nu_lokaal.hour == 12 and nu_lokaal.minute == 51:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:

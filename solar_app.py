@@ -44,7 +44,9 @@ def get_weather_forecast(lat=50.78, lon=5.41):
     try:
         url = f"https://open-meteo.com{lat}&longitude={lon}&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin"
         r = requests.get(url, timeout=5)
-        return r.json()["daily"] if r.status_code == 200 else None
+        if r.status_code == 200:
+            return r.json()["daily"]
+        return None
     except: return None
 
 def laad_dagpiek():
@@ -79,7 +81,7 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA LADEN UIT SHEET ---
+# --- DATA LADEN ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -96,27 +98,32 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
-if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
-sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+# Update Dagpieken
+update_cache = False
+if val_s > st.session_state.p_symo_peak:
+    st.session_state.p_symo_peak = val_s
+    update_cache = True
+if val_g > st.session_state.p_galvo_peak:
+    st.session_state.p_galvo_peak = val_g
+    update_cache = True
+if update_cache:
+    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- WEER APP SECTIE ---
+# --- WEER APP SECTIE (BOVENAAN) ---
 forecast = get_weather_forecast()
 if forecast:
+    # We halen specifiek de data van vandaag op (index 0)
     weer_tekst, weer_icoon = get_weather_info(forecast['weather_code'][0])
-    st.info(f"**Actueel in Tongeren:** {weer_icoon} {weer_tekst}")
     
-    w1, w2 = st.columns(2)
-    with w1:
-        st.metric("Vandaag", f"{forecast['temperature_2m_max'][0]}°C", f"{forecast['shortwave_radiation_sum'][0]} MJ/m²")
-    with w2:
-        m_weer, m_icoon = get_weather_info(forecast['weather_code'][1])
-        st.metric("Morgen", f"{forecast['temperature_2m_max'][1]}°C", f"{m_icoon} {m_weer}")
+    st.info(f"**Weer in Tongeren:** {weer_icoon} {weer_tekst} | 🌡️ {forecast['temperature_2m_max'][0]}°C | ☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
+    
+    if forecast['shortwave_radiation_sum'][0] > 20:
+        st.warning("🚀 **RECORDWEER GEALERTEERD:** Extreem veel zonnestraling vandaag!")
 else:
-    st.warning("Weergegevens niet beschikbaar.")
+    st.error("Weergegevens konden niet worden opgehaald.")
 
 st.divider()
 

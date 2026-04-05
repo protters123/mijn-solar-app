@@ -12,7 +12,7 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -33,8 +33,10 @@ def get_weather_forecast():
     try:
         # Locatie Tongeren: lat 50.78, lon 5.46
         url = "https://open-meteo.com"
-        r = requests.get(url, timeout=5).json()
-        return r['daily']
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            return r.json()["daily"]
+        return None
     except:
         return None
 
@@ -78,7 +80,7 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA LADEN UIT SHEET ---
+# --- DATA LADEN ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -95,60 +97,31 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken in geheugen
-update_cache = False
-if val_s > st.session_state.p_symo_peak:
-    st.session_state.p_symo_peak = val_s
-    update_cache = True
-if val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_galvo_peak = val_g
-    update_cache = True
-
-if update_cache:
-    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
-
-# --- RECORD CHECK & BALLONNEN ---
-current_all_time = max(historical_max, val_t)
-if val_t > historical_max and not st.session_state.record_celebrated:
-    st.balloons()
-    st.session_state.record_celebrated = True
-elif val_t <= historical_max:
-    st.session_state.record_celebrated = False
-
-# --- AUTO-LOGICA (ARCHIVEREN OM 23:00) ---
-vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
-    laatst_datum = ""
-    if os.path.exists(ARCHIVE_LOG):
-        try:
-            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
-        except: pass
-    if laatst_datum != vandaag:
-        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
-        try:
-            r = requests.get(WEBAPP_URL, params=params, timeout=15)
-            if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
-        except: pass
+# Update Dagpieken
+if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
+if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
+sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- WEERSVERWACHTING SECTIE ---
+# --- DE WEER-SECTIE (NU ECHT GEFIXT) ---
 forecast = get_weather_forecast()
 if forecast:
-    weer_status, weer_icoon = vertaal_weer(forecast['weather_code'][0])
-    temp_max = forecast['temperature_2m_max'][0]
-    straling = forecast['shortwave_radiation_sum'][0]
+    # CRUCIAAL: Gebruik [0] om de eerste waarde uit de lijst te pakken
+    w_code = forecast['weather_code'][0]
+    w_tekst, w_icoon = vertaal_weer(w_code)
+    t_max = forecast['temperature_2m_max'][0]
+    z_straling = forecast['shortwave_radiation_sum'][0]
     
-    st.info(f"**Vandaag in Tongeren:** {weer_icoon} {weer_status} | 🌡️ {temp_max}°C | ☀️ {straling} MJ/m²")
-    if straling > 20:
-        st.warning("🚀 **Potentieel Recordweer!** Hoge zonnestraling voorspeld.")
+    st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 else:
     st.error("Weergegevens tijdelijk niet beschikbaar.")
 
+st.divider()
+
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
+current_all_time = max(historical_max, val_t)
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
 
 st.divider()
@@ -169,9 +142,7 @@ st.divider()
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
-else:
-    st.info("Tabel wordt geladen...")
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
 time.sleep(2)
 st.rerun()

@@ -15,7 +15,7 @@ SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
 # VUL HIER JE ECHTE GOOGLE SCRIPT URL IN
-WEBAPP_URL = "https://google.com" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxwClGZryn1ZbtLWqAQs5LF98WVm0ANb5rOyjgbYG9xQXHEjfgWG5RUbfXGXf8B4Xbb/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -73,7 +73,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 # --- AUTO-ARCHIVEREN LOGICA (13:45) ---
 # --- AUTO-ARCHIVEREN LOGICA (Aangepast naar 13:52) ---
 target_uur = 13
-target_min = 54
+target_min = 57
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     vandaag_sleutel = nu_lokaal.strftime('%Y-%m-%d')

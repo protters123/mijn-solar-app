@@ -100,7 +100,7 @@ elif val_t <= historical_max:
 
 # --- AUTO-LOGICA (23:00) ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
+if nu_lokaal.hour == 8 and nu_lokaal.minute == 38:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:

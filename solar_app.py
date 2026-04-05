@@ -14,7 +14,7 @@ import pytz
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# FIX 1: Je echte Google Script URL (niet google.com)
+# VERGEET NIET: Vul hier je echte Google Script URL in!
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -26,6 +26,9 @@ st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
+vandaag_str = nu_lokaal.strftime('%d-%m-%Y') # Datum format
+tijd_str = nu_lokaal.strftime('%H:%M')       # Tijd format
+
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
@@ -90,31 +93,33 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- AUTO-ARCHIVEREN LOGICA ---
-vandaag = nu_lokaal.strftime('%Y-%m-%d')
-huidig_uur = nu_lokaal.hour
-huidige_minuut = nu_lokaal.minute
+# Aangepast naar 13:35 zoals gevraagd
+target_uur = 13
+target_min = 35
 
-# FIX 2: Testtijd op 13:35 zetten (daarna weer terug naar 23:00)
-if huidig_uur == 20 and huidige_minuut == 30:
+if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
+    vandaag_sleutel = nu_lokaal.strftime('%Y-%m-%d')
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     
-    if laatst_datum != vandaag:
+    if laatst_datum != vandaag_sleutel:
         params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_sleutel)
                 st.balloons()
                 st.toast("🚀 Dagpiek automatisch gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-st.write(f"⏰ App-tijd: {huidig_uur}:{huidige_minuut:02d} (Wacht op 13:35)")
+
+# Datum en Tijd weergave bovenin
+st.write(f"📅 **Datum:** {vandaag_str} | ⏰ **Tijd:** {tijd_str} (Wacht op {target_uur}:{target_min})")
 
 forecast = get_weather_forecast()
 if forecast:

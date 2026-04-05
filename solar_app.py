@@ -31,16 +31,17 @@ ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 def vertaal_weer(code):
     mapping = {
         0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Motregen", "🌦️"),
-        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
+        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 48: ("Rijpende mist", "🌫️"),
+        51: ("Lichte motregen", "🌦️"), 61: ("Lichte regen", "🌧️"), 63: ("Matige regen", "🌧️"),
+        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
     }
     return mapping.get(code, ("Variabel", "🌡️"))
 
 @st.cache_data(ttl=3600)
 def get_weather_forecast():
     try:
-        # Locatie: Tongeren-Borgloon
-        url = "https://open-meteo.com"
+        # EXACTE LINK VOOR TONGEREN-BORGLOON
+        url = "https://api.open-meteo.com/v1/forecast?latitude=50.7805&longitude=5.4648&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin&forecast_days=1"
         r = requests.get(url, timeout=5)
         if r.status_code == 200:
             return r.json()["daily"]
@@ -80,6 +81,34 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
+# --- LIVE DATA OPHALEN ---
+val_s, icon_s = fetch_status(URL_1)
+val_g, icon_g = fetch_status(URL_2)
+val_t = val_s + val_g
+
+# Update Dagpieken
+if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
+if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
+sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+
+# --- UI DASHBOARD ---
+st.title("☀️ Solar Piek Pro") 
+
+# --- WEER STATUS BALK (GEFIXED) ---
+forecast = get_weather_forecast()
+if forecast:
+    # We gebruiken [0] omdat de link een lijst voor 1 dag stuurt
+    w_code = forecast['weather_code'][0]
+    weer_status, weer_icoon = vertaal_weer(w_code)
+    t_max = forecast['temperature_2m_max'][0]
+    z_straling = forecast['shortwave_radiation_sum'][0]
+    
+    st.info(f"**Weerbericht Tongeren:** {weer_icoon} {weer_status} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
+else:
+    st.error("Weergegevens tijdelijk niet beschikbaar.")
+
+st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
+
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
@@ -92,34 +121,7 @@ try:
             table_df = df
 except: pass
 
-# --- LIVE DATA OPHALEN ---
-val_s, icon_s = fetch_status(URL_1)
-val_g, icon_g = fetch_status(URL_2)
-val_t = val_s + val_g
-
-# Update Dagpieken in geheugen
-if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
-    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
-    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
-
-# --- UI DASHBOARD ---
-st.title("☀️ Solar Piek Pro") 
-
-# --- NIEUW: WEER STATUS BALK ---
-forecast = get_weather_forecast()
-if forecast:
-    weer_status, weer_icoon = vertaal_weer(forecast['weather_code'][0])
-    temp_v = forecast['temperature_2m_max'][0]
-    zon_v = forecast['shortwave_radiation_sum'][0]
-    st.info(f"**Weerbericht Tongeren:** {weer_icoon} {weer_status} | 🌡️ {temp_v}°C | ☀️ {zon_v} MJ/m²")
-else:
-    st.error("Weergegevens tijdelijk niet beschikbaar.")
-
-st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-current_all_time = max(historical_max, val_t)
-st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
-
+st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
 c1, c2 = st.columns(2)
@@ -138,8 +140,6 @@ st.divider()
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
-else:
-    st.info("Tabel wordt geladen...")
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)

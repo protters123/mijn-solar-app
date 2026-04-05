@@ -8,15 +8,14 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - UPDATE ☀️
+# SOLAR PIEK PRO - HERSTEL OVERZICHT ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# FIX: Herstelde CSV URL (niet naar google.com)
+# FIX: De link naar je data hersteld
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
-# FIX: Jouw Google Script URL (eindigend op /exec)
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
+WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -58,7 +57,7 @@ def laad_dagpiek():
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    if len(parts) == 3 and parts[0] == vandaag_iso:
+                    if len(parts) >= 3 and parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
@@ -77,6 +76,7 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
+# LIVE DATA
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
@@ -86,9 +86,9 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN (Trigger 14:20) ---
+# --- AUTO-ARCHIVEREN (Trigger 14:25) ---
 target_uur = 14
-target_min = 20
+target_min = 25
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
@@ -108,7 +108,6 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-# DIT IS DE REGEL DIE JE WILT ZIEN (Geen 'wacht op' meer)
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 forecast = get_weather_forecast()

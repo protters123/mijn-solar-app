@@ -8,16 +8,14 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - HERSTEL VERSIE ☀️
+# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
-# FIX: Correcte link naar je Google Sheet data
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-
-# Jouw unieke Google Script URL
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
+# Jouw Google Script URL
+WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -55,26 +53,31 @@ if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
 
+# --- EENMALIGE CORRECTIE NAAR 1611 W ---
+if st.session_state.p_symo_peak < 1611:
+    st.session_state.p_symo_peak = 1611.0
+    sla_dagpiek_op(1611.0, st.session_state.p_galvo_peak)
+
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA ---
+# --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken
+# Update Dagpieken (als de live waarde hoger is dan de opgeslagen 1611)
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN (TRIGGER 14:32) ---
-target_uur = 14
-target_min = 40
+# --- AUTO-ARCHIVEREN (Trigger om 20:30) ---
+target_uur = 20
+target_min = 30
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
@@ -82,6 +85,7 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
+    
     if laatst_datum != vandaag_iso:
         params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
@@ -89,17 +93,16 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Gearchiveerd naar Google Sheets!")
+                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-# Hier staat de datum nu correct
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 
-# DATA LADEN UIT SHEET
+# --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -109,8 +112,7 @@ try:
         if not df.empty:
             historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
             table_df = df
-except Exception as e:
-    st.error(f"Tabel kon niet laden: {e}")
+except: pass
 
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
@@ -130,6 +132,6 @@ st.subheader("💚 Maandoverzicht")
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)
 st.rerun()

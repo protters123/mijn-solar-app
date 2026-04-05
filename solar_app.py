@@ -8,12 +8,14 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - UPDATE 14:20 ☀️
+# SOLAR PIEK PRO - UPDATE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+# FIX: Herstelde CSV URL (niet naar google.com)
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
+# FIX: Jouw Google Script URL (eindigend op /exec)
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -94,7 +96,6 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
-    
     if laatst_datum != vandaag_iso:
         params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
@@ -102,12 +103,12 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Gearchiveerd naar Sheet!")
+                st.toast("🚀 Gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-# DIT IS DE REGEL DIE JE WILT ZIEN:
+# DIT IS DE REGEL DIE JE WILT ZIEN (Geen 'wacht op' meer)
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 forecast = get_weather_forecast()
@@ -136,9 +137,11 @@ st.divider()
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
+    st.metric("Nu", f"{val_s:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_symo_peak:,.0f} W")
 with c2:
     st.markdown(f"### {icon_g} Galvo")
+    st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()

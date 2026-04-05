@@ -12,7 +12,7 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -27,7 +27,7 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER FUNCTIE (Tongeren-Borgloon) ---
+# --- WEER FUNCTIE (Regio Tongeren-Borgloon) ---
 @st.cache_data(ttl=3600)
 def get_weather_forecast(lat=50.78, lon=5.41):
     try:
@@ -87,11 +87,12 @@ try:
             table_df = df
 except: pass
 
-# --- LIVE DATA ---
+# --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
+# Update Dagpieken
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
@@ -103,8 +104,9 @@ st.title("☀️ Solar Piek Pro")
 # Record Waarschuwing op basis van weer
 forecast = get_weather_forecast()
 if forecast:
-    if forecast['shortwave_radiation_sum'][0] > 22:
-        st.warning(f"🔥 **RECORD ALARM:** Vandaag extreme zon voorspeld ({forecast['shortwave_radiation_sum'][0]} MJ/m²)!")
+    solar_vandaag = forecast['shortwave_radiation_sum'][0]
+    if solar_vandaag > 22:
+        st.warning(f"🔥 **RECORD ALARM:** Vandaag extreme zon voorspeld ({solar_vandaag} MJ/m²)!")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 current_all_time = max(historical_max, val_t)
@@ -124,16 +126,18 @@ with c2:
 
 st.divider()
 
-# --- WEERSVOORSPELLING SECTIE ---
+# --- WEERSVOORSPELLING SECTIE (GECORRIGEERD) ---
 st.subheader("🌤️ Weersverwachting (Regio Tongeren)")
 if forecast:
     wf1, wf2 = st.columns(2)
     with wf1:
+        temp_v = forecast['temperature_2m_max'][0]
         sol_v = forecast['shortwave_radiation_sum'][0]
-        st.info(f"**Vandaag**\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {sol_v} MJ/m²")
+        st.info(f"**Vandaag**\n\n🌡️ {temp_v}°C\n\n☀️ {sol_v} MJ/m²")
     with wf2:
+        temp_m = forecast['temperature_2m_max'][1]
         sol_m = forecast['shortwave_radiation_sum'][1]
-        st.info(f"**Morgen**\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {sol_m} MJ/m²")
+        st.info(f"**Morgen**\n\n🌡️ {temp_m}°C\n\n☀️ {sol_m} MJ/m²")
 else:
     st.error("Weergegevens konden niet worden geladen.")
 

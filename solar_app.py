@@ -39,8 +39,8 @@ def vertaal_weer(code):
 @st.cache_data(ttl=3600)
 def get_weather_forecast():
     try:
-        # Exact de URL van jouw screenshot (Tongeren-Borgloon)
-        url = "https://open-meteo.com"
+        # EXACT DE LINK DIE JE STUURDE:
+        url = "https://api.open-meteo.com/v1/forecast?latitude=50.7805&longitude=5.4648&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin&forecast_days=1"
         r = requests.get(url, timeout=5)
         if r.status_code == 200:
             return r.json()["daily"]
@@ -89,10 +89,10 @@ sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- DE WEER-SECTIE (FIXED) ---
+# --- DE WEER-SECTIE (FIXED MET [0] INDEX) ---
 forecast = get_weather_forecast()
 if forecast:
-    # We pakken het EERSTE item [0] uit de lijsten die de weerdienst stuurt
+    # Hier pakken we het EERSTE item uit de lijsten [0]
     w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
     t_max = forecast['temperature_2m_max'][0]
     z_straling = forecast['shortwave_radiation_sum'][0]
@@ -116,6 +116,6 @@ with c2:
     st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
-st.caption(f"Laatste update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)
 st.rerun()

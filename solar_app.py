@@ -93,7 +93,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
 
 # VERBETERD: nu_lokaal.minute in plaats van .min
-if nu_lokaal.hour == 12 and nu_lokaal.minute == 55:
+if nu_lokaal.hour == 12 and nu_lokaal.minute == 49:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:

@@ -93,29 +93,28 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
 
 # De check op 23:00 uur lokale tijd
-# --- TIJDELIJKE TEST VOOR AUTOMATISCHE ARCHIVERING (13:05) ---
-vandaag = nu_lokaal.strftime('%Y-%m-%d')
+# --- DEBUGGING TIJDZONE CHECK ---
 huidig_uur = nu_lokaal.hour
 huidige_minuut = nu_lokaal.minute
+st.write(f"⏰ De app denkt dat het nu **{huidig_uur}:{huidige_minuut:02d}** is.")
 
-# Laat de tijd in de app zien voor de zekerheid
-st.write(f"⏳ Wachten op automatische actie om 13:05... (App-tijd: {huidig_uur}:{huidige_minuut:02d})")
-
-if huidig_uur == 13 and huidige_minuut == 5:
-    laatst_datum = ""
+# We zetten de testtijd nu op 13:12 zodat je tijd hebt om op te slaan
+if huidig_uur == 13 and huidige_minuut == 10:
     if os.path.exists(ARCHIVE_LOG):
         with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
-    
-    # De automatische check
+    else:
+        laatst_datum = ""
+        
     if laatst_datum != vandaag:
         params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.balloons() 
-                st.success("🚀 AUTOMAAT: Data succesvol naar Google Sheets gestuurd!")
+                st.balloons()
+                st.success("✅ AUTOMATISCH VERZONDEN!")
         except: pass
+
 
     
     # Alleen archiveren als we dat vandaag nog niet gedaan hebben

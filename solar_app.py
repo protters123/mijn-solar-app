@@ -146,3 +146,4 @@ else:
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)
 st.rerun()
+

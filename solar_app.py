@@ -33,7 +33,7 @@ def vertaal_weer(code):
         0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 3: ("Bewolkt", "☁️"),
         45: ("Mistig", "🌫️"), 48: ("Rijpende mist", "🌫️"),
         51: ("Lichte motregen", "🌦️"), 61: ("Lichte regen", "🌧️"), 63: ("Matige regen", "🌧️"),
-        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️buien"), 95: ("Onweer", "⛈️")
+        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
     }
     return mapping.get(code, ("Onbekend", "🌡️"))
 
@@ -99,23 +99,18 @@ val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
 # Update Dagpieken
-update_cache = False
-if val_s > st.session_state.p_symo_peak:
-    st.session_state.p_symo_peak = val_s
-    update_cache = True
-if val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_galvo_peak = val_g
-    update_cache = True
-if update_cache:
+if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
+    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
+    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- NIEUW: DYNAMISCHE WEER SECTIE ---
+# --- NIEUW: WEER APP SECTIE ---
 forecast = get_weather_forecast()
 if forecast:
-    # Index [0] is cruciaal om de fout uit je screenshot op te lossen
+    # We pakken specifiek index 0 voor de data van vandaag
     weer_status, weer_icoon = vertaal_weer(forecast['weather_code'][0])
     temp_vandaag = forecast['temperature_2m_max'][0]
     straling_vandaag = forecast['shortwave_radiation_sum'][0]
@@ -123,9 +118,9 @@ if forecast:
     st.info(f"**Actueel weer:** {weer_icoon} {weer_status} | 🌡️ {temp_vandaag}°C | ☀️ {straling_vandaag} MJ/m²")
     
     if straling_vandaag > 20:
-        st.warning("🚀 **Recordweer gealerteerd!** Zeer hoge zonnestraling verwacht.")
+        st.warning("🚀 **Potentieel Recordweer!** Zeer hoge zonnestraling verwacht vandaag.")
 else:
-    st.error("Weergegevens tijdelijk niet beschikbaar (controleer internet).")
+    st.error("Weergegevens konden niet worden geladen.")
 
 st.divider()
 

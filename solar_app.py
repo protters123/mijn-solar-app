@@ -8,11 +8,10 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - HERSTEL OVERZICHT ☀️
+# SOLAR PIEK PRO - HERSTEL VERSIE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# FIX: De link naar je data hersteld
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
 WEBAPP_URL = "https://google.com" 
@@ -57,7 +56,8 @@ def laad_dagpiek():
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    if len(parts) >= 3 and parts[0] == vandaag_iso:
+                    # Check of de datum in het bestand overeenkomt met vandaag
+                    if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
@@ -66,6 +66,7 @@ def sla_dagpiek_op(s, g):
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag_iso},{s},{g}")
 
+# --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
@@ -76,19 +77,20 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# LIVE DATA
+# LIVE DATA OPHALEN
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
+# Update Dagpieken
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN (Trigger 14:25) ---
+# --- AUTO-ARCHIVEREN (TRIGGER 14:28) ---
 target_uur = 14
-target_min = 25
+target_min = 28
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
@@ -103,7 +105,7 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Gearchiveerd!")
+                st.toast("🚀 Gearchiveerd naar Google Sheets!")
         except: pass
 
 # --- UI DASHBOARD ---
@@ -119,7 +121,8 @@ if forecast:
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 
-historical_max = 3729.0
+# DATA LADEN UIT SHEET
+historical_max = 0.0
 table_df = pd.DataFrame()
 try:
     res = requests.get(CSV_URL, timeout=10)
@@ -128,7 +131,8 @@ try:
         if not df.empty:
             historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
             table_df = df
-except: pass
+except Exception as e:
+    st.error(f"Fout bij laden tabel: {e}")
 
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
@@ -147,6 +151,8 @@ st.divider()
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
+else:
+    st.warning("Geen data gevonden in de Google Sheet.")
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)

@@ -27,27 +27,27 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER INTERPRETATIE FUNCTIE ---
-def get_weather_info(code):
+# --- WEER INTERPRETATIE (Zon, Regen, Mist, etc.) ---
+def vertaal_weer(code):
     mapping = {
         0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 3: ("Bewolkt", "☁️"),
         45: ("Mistig", "🌫️"), 48: ("Rijpende mist", "🌫️"),
-        51: ("Lichte motregen", "🌦️"), 53: ("Matige motregen", "🌦️"), 55: ("Dichte motregen", "🌦️"),
-        61: ("Lichte regen", "🌧️"), 63: ("Matige regen", "🌧️"), 65: ("Zware regen", "🌧️"),
-        71: ("Lichte sneeuwval", "❄️"), 80: ("Lichte regenbuien", "🌦️"),
-        95: ("Onweer", "⚡"), 96: ("Onweer met hagel", "⛈️")
+        51: ("Lichte motregen", "🌦️"), 61: ("Lichte regen", "🌧️"), 63: ("Matige regen", "🌧️"),
+        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️buien"), 95: ("Onweer", "⛈️")
     }
     return mapping.get(code, ("Onbekend", "🌡️"))
 
 @st.cache_data(ttl=3600)
-def get_weather_forecast(lat=50.78, lon=5.41):
+def get_weather_forecast():
     try:
-        url = f"https://open-meteo.com{lat}&longitude={lon}&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin"
+        # Locatie: Tongeren-Borgloon
+        url = "https://open-meteo.com"
         r = requests.get(url, timeout=5)
         if r.status_code == 200:
             return r.json()["daily"]
         return None
-    except: return None
+    except:
+        return None
 
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
@@ -81,7 +81,7 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA LADEN ---
+# --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -112,18 +112,20 @@ if update_cache:
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- WEER APP SECTIE (BOVENAAN) ---
+# --- NIEUW: DYNAMISCHE WEER SECTIE ---
 forecast = get_weather_forecast()
 if forecast:
-    # We halen specifiek de data van vandaag op (index 0)
-    weer_tekst, weer_icoon = get_weather_info(forecast['weather_code'][0])
+    # Index [0] is cruciaal om de fout uit je screenshot op te lossen
+    weer_status, weer_icoon = vertaal_weer(forecast['weather_code'][0])
+    temp_vandaag = forecast['temperature_2m_max'][0]
+    straling_vandaag = forecast['shortwave_radiation_sum'][0]
     
-    st.info(f"**Weer in Tongeren:** {weer_icoon} {weer_tekst} | 🌡️ {forecast['temperature_2m_max'][0]}°C | ☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
+    st.info(f"**Actueel weer:** {weer_icoon} {weer_status} | 🌡️ {temp_vandaag}°C | ☀️ {straling_vandaag} MJ/m²")
     
-    if forecast['shortwave_radiation_sum'][0] > 20:
-        st.warning("🚀 **RECORDWEER GEALERTEERD:** Extreem veel zonnestraling vandaag!")
+    if straling_vandaag > 20:
+        st.warning("🚀 **Recordweer gealerteerd!** Zeer hoge zonnestraling verwacht.")
 else:
-    st.error("Weergegevens konden niet worden opgehaald.")
+    st.error("Weergegevens tijdelijk niet beschikbaar (controleer internet).")
 
 st.divider()
 

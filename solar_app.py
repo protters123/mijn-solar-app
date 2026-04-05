@@ -12,8 +12,9 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+# FIX: Correcte URL voor Google Sheets export
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxwClGZryn1ZbtLWqAQs5LF98WVm0ANb5rOyjgbYG9xQXHEjfgWG5RUbfXGXf8B4Xbb/exec" 
+WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -50,8 +51,6 @@ if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak = s_start
     st.session_state.p_galvo_peak = g_start
-if 'record_celebrated' not in st.session_state:
-    st.session_state.record_celebrated = False
 
 def fetch_status(url):
     try:
@@ -75,7 +74,7 @@ vandaag = nu_lokaal.strftime('%Y-%m-%d')
 huidig_uur = nu_lokaal.hour
 huidige_minuut = nu_lokaal.minute
 
-# Deze tekst laat je op het scherm zien of de app de juiste tijd heeft
+# Visuele tijdcheck
 st.write(f"⏰ App-tijd: {huidig_uur}:{huidige_minuut:02d} (Wacht op 13:18)")
 
 if huidig_uur == 13 and huidige_minuut == 18:
@@ -123,9 +122,12 @@ with c2:
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
+# --- HERSTELD: MAANDOVERZICHT ---
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
+else:
+    st.info("Tabel wordt geladen vanuit Google Sheets...")
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)

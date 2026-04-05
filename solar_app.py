@@ -104,9 +104,10 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-st.write(f"📅 **Datum:** {vandaag_str} | ⏰ **Tijd:** {nu_lokaal.strftime('%H:%M')} (Schrijven om {target_uur}:{target_min})")
+# Hiermee staat de tijd en datum direct onder de titel
+st.write(f"⏰ App-tijd: {nu_lokaal.hour}:{nu_lokaal.minute:02d} ({nu_lokaal.strftime('%d-%m-%Y')})")
 
-st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
+forecast = get_weather_forecast()
 
 # Kolommen voor de individuele pieken
 c1, c2 = st.columns(2)

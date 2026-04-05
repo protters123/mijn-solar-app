@@ -27,28 +27,6 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER FUNCTIE (Tongeren-Borgloon) ---
-@st.cache_data(ttl=3600)
-def get_weather_forecast():
-    try:
-        # URL gebaseerd op jouw specifieke parameters: weather_code, temp_max, radiation
-        url = "https://open-meteo.com"
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200:
-            return r.json()["daily"]
-        return None
-    except:
-        return None
-
-def vertaal_weer(code):
-    mapping = {
-        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 48: ("Rijpende mist", "🌫️"),
-        51: ("Motregen", "🌦️"), 61: ("Lichte regen", "🌧️"), 63: ("Matige regen", "🌧️"),
-        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
-    }
-    return mapping.get(code, ("Variabel", "🌡️"))
-
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
     if os.path.exists(CACHE_FILE):
@@ -98,7 +76,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken
+# Update Dagpieken in geheugen
 update_cache = False
 if val_s > st.session_state.p_symo_peak:
     st.session_state.p_symo_peak = val_s
@@ -106,32 +84,38 @@ if val_s > st.session_state.p_symo_peak:
 if val_g > st.session_state.p_galvo_peak:
     st.session_state.p_galvo_peak = val_g
     update_cache = True
+
 if update_cache:
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
+# --- RECORD CHECK & BALLONNEN ---
+current_all_time = max(historical_max, val_t)
+if val_t > historical_max and not st.session_state.record_celebrated:
+    st.balloons()
+    st.session_state.record_celebrated = True
+elif val_t <= historical_max:
+    st.session_state.record_celebrated = False
+
+# --- AUTO-LOGICA (ARCHIVEREN OM 23:00) ---
+vandaag = nu_lokaal.strftime('%Y-%m-%d')
+if nu_lokaal.hour == 23:
+    laatst_datum = ""
+    if os.path.exists(ARCHIVE_LOG):
+        try:
+            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
+        except: pass
+    if laatst_datum != vandaag:
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
+        try:
+            r = requests.get(WEBAPP_URL, params=params, timeout=15)
+            if r.status_code == 200:
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
+                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
+        except: pass
+
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-
-# --- NIEUWE WEER SECTIE ---
-forecast = get_weather_forecast()
-if forecast:
-    # We pakken de eerste waarde [0] uit de lijsten
-    w_code = int(forecast['weather_code'][0])
-    temp_max = forecast['temperature_2m_max'][0]
-    zon_energie = forecast['shortwave_radiation_sum'][0]
-    status_tekst, icoon = vertaal_weer(w_code)
-
-    st.info(f"**Actueel in Tongeren:** {icoon} {status_tekst} | 🌡️ {temp_max}°C | ☀️ {zon_energie} MJ/m²")
-    
-    if zon_energie > 22:
-        st.warning("🔥 **Recordwaarschuwing:** Extreem veel zon verwacht vandaag!")
-else:
-    st.error("Weergegevens tijdelijk niet beschikbaar.")
-
-st.divider()
-
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-current_all_time = max(historical_max, val_t)
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
 
 st.divider()
@@ -152,7 +136,9 @@ st.divider()
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
+else:
+    st.info("Tabel wordt geladen...")
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
 time.sleep(2)
 st.rerun()

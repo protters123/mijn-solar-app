@@ -67,11 +67,6 @@ val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
 # Update Dagpieken
-# TIJDELIJKE CORRECTIE (Verwijder dit na één keer laden!)
-if st.session_state.p_symo_peak < 1611:
-    st.session_state.p_symo_peak = 1611
-    sla_dagpiek_op(1611, st.session_state.p_galvo_peak)
-
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)

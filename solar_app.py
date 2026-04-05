@@ -29,6 +29,24 @@ def get_weather_forecast(lat=50.85, lon=4.35): # Coördinaten van Brussel als de
         return r['daily']
     except:
         return None
+# --- WEERSVOORSPELLING SECTIE ---
+st.subheader("🌤️ Weersverwachting (Solar)")
+forecast = get_weather_forecast(lat=50.85, lon=4.35) # Pas hier je eigen breedte/lengtegraad aan
+
+if forecast:
+    wf1, wf2 = st.columns(2)
+    with wf1:
+        st.write("**Vandaag**")
+        st.metric("Temp", f"{forecast['temperature_2m_max'][0]}°C")
+        st.write(f"Straling: {forecast['shortwave_radiation_sum'][0]} MJ/m²")
+    with wf2:
+        st.write("**Morgen**")
+        st.metric("Temp", f"{forecast['temperature_2m_max'][1]}°C")
+        st.write(f"Straling: {forecast['shortwave_radiation_sum'][1]} MJ/m²")
+else:
+    st.info("Weergegevens tijdelijk niet beschikbaar.")
+
+st.divider()
 
 
 # --- TIJDZONE & GEHEUGEN ---

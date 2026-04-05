@@ -104,8 +104,8 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-# Hiermee staat de tijd en datum direct onder de titel
-st.write(f"⏰ App-tijd: {nu_lokaal.hour}:{nu_lokaal.minute:02d} ({nu_lokaal.strftime('%d-%m-%Y')})")
+# Aangepaste regel: App-tijd met de datum tussen haakjes
+st.write(f"⏰ App-tijd: {nu_lokaal.hour}:{nu_lokaal.minute:02d} ({vandaag_str})")
 
 forecast = get_weather_forecast()
 

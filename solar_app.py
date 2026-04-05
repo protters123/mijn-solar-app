@@ -13,7 +13,8 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-# Pas deze WEBAPP_URL aan naar de URL van je Google Apps Script
+
+# FIX 1: Je echte Google Script URL (niet google.com)
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -88,9 +89,13 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN OM 23:00 ---
+# --- AUTO-ARCHIVEREN LOGICA ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
+huidig_uur = nu_lokaal.hour
+huidige_minuut = nu_lokaal.minute
+
+# FIX 2: Testtijd op 13:35 zetten (daarna weer terug naar 23:00)
+if huidig_uur == 13 and huidige_minuut == 35:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
@@ -98,19 +103,18 @@ if nu_lokaal.hour == 23:
         except: pass
     
     if laatst_datum != vandaag:
-        params = {
-            "symo": int(st.session_state.p_symo_peak), 
-            "galvo": int(st.session_state.p_galvo_peak)
-        }
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
+                st.balloons()
                 st.toast("🚀 Dagpiek automatisch gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
+st.write(f"⏰ App-tijd: {huidig_uur}:{huidige_minuut:02d} (Wacht op 13:35)")
 
 forecast = get_weather_forecast()
 if forecast:
@@ -147,7 +151,6 @@ with c2:
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
-
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))

@@ -15,7 +15,7 @@ SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
 # JOUW PERSOONLIJKE LINK (NU CORRECT INGEVULD):
-WEBAPP_URL = "https://google.com"
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw2FVnk85VhZqhr_QL7e-nN_KRVSxiVVVrDrkOdYQYK5QPDa-wWe9bUaocstvH0mrsQ/exec"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"

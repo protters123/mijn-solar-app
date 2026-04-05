@@ -13,7 +13,8 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-# Pas deze WEBAPP_URL aan naar de URL van je Google Apps Script
+
+# Je Google Script URL (eindigend op /exec)
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -25,51 +26,37 @@ st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
+vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
+vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
+
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER INTERPRETATIE ---
-def vertaal_weer(code):
-    mapping = {
-        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
-        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
-    }
-    return mapping.get(code, ("Variabel", "🌡️"))
-
-@st.cache_data(ttl=3600)
-def get_weather_forecast():
-    try:
-        url = "https://api.open-meteo.com/v1/forecast?latitude=50.7805&longitude=5.4648&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin&forecast_days=1"
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200:
-            return r.json()["daily"]
-        return None
-    except:
-        return None
-
 def laad_dagpiek():
-    vandaag = nu_lokaal.strftime('%Y-%m-%d')
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    if parts[0] == vandaag:
+                    if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
 
 def sla_dagpiek_op(s, g):
-    vandaag = nu_lokaal.strftime('%Y-%m-%d')
     with open(CACHE_FILE, "w") as f:
-        f.write(f"{vandaag},{s},{g}")
+        f.write(f"{vandaag_iso},{s},{g}")
 
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
+
+# --- EENMALIGE CORRECTIE NAAR 1611 W ---
+if st.session_state.p_symo_peak < 1611:
+    st.session_state.p_symo_peak = 1611.0
+    sla_dagpiek_op(1611.0, st.session_state.p_galvo_peak)
 
 def fetch_status(url):
     try:
@@ -88,7 +75,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN (Trigger om 20:30) ---
+# --- AUTO-ARCHIVEREN OM 20:30 ---
 target_uur = 20
 target_min = 30
 
@@ -111,13 +98,8 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-
-forecast = get_weather_forecast()
-if forecast:
-    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
-    t_max = forecast['temperature_2m_max'][0]
-    z_straling = forecast['shortwave_radiation_sum'][0]
-    st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
+# HIER STAAT DE TIJD EN DATUM WEER
+st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 
@@ -147,7 +129,6 @@ with c2:
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
-
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))

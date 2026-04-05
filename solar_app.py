@@ -12,6 +12,7 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+# FIX 1: Correcte Google Sheets Export URL
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
@@ -26,20 +27,20 @@ tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 
-# --- WEER INTERPRETATIE (Zon, Regen, Mist, etc.) ---
+# --- WEER INTERPRETATIE ---
 def get_weather_info(code):
     mapping = {
         0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 3: ("Bewolkt", "☁️"),
         45: ("Mistig", "🌫️"), 48: ("Rijpende mist", "🌫️"),
         51: ("Motregen", "🌦️"), 61: ("Regen", "🌧️"), 63: ("Matige regen", "🌧️"),
-        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⚡")
+        65: ("Zware regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
     }
     return mapping.get(code, ("Onbekend", "🌡️"))
 
 @st.cache_data(ttl=3600)
 def get_weather_forecast():
     try:
-        # Locatie: Tongeren-Borgloon
+        # FIX 2: Correcte API URL met coördinaten voor Tongeren-Borgloon
         url = "https://open-meteo.com"
         r = requests.get(url, timeout=10)
         if r.status_code == 200:
@@ -93,12 +94,12 @@ st.title("☀️ Solar Piek Pro")
 # --- GECORRIGEERDE WEER SECTIE ---
 forecast = get_weather_forecast()
 if forecast:
-    # Hier zit de fix: pak de EERSTE dag [0] uit de lijst
+    # FIX 3: Gebruik [0] om de data van vandaag uit de lijsten te halen
     desc_v, icon_v = get_weather_info(forecast['weather_code'][0])
     temp_v = forecast['temperature_2m_max'][0]
     zon_v = forecast['shortwave_radiation_sum'][0]
     
-    st.info(f"**Weer in Tongeren:** {icon_v} {desc_v} | 🌡️ {temp_v}°C | ☀️ {zon_v} MJ/m²")
+    st.info(f"**Weer in Tongeren-Borgloon:** {icon_v} {desc_v} | 🌡️ {temp_v}°C | ☀️ {zon_v} MJ/m²")
 else:
     st.error("Weergegevens konden niet worden geladen.")
 

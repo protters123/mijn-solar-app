@@ -12,6 +12,7 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+# FIX: De link moet exact zo zijn (met /spreadsheets/d/)
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
 WEBAPP_URL = "https://google.com" 
@@ -31,24 +32,6 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-def vertaal_weer(code):
-    mapping = {
-        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
-        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
-    }
-    return mapping.get(code, ("Variabel", "🌡️"))
-
-@st.cache_data(ttl=3600)
-def get_weather_forecast():
-    try:
-        url = "https://open-meteo.com"
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200:
-            return r.json()["daily"]
-        return None
-    except: return None
-
 def laad_dagpiek():
     if os.path.exists(CACHE_FILE):
         try:
@@ -56,7 +39,6 @@ def laad_dagpiek():
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    # Check of de datum in het bestand overeenkomt met vandaag
                     if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
@@ -66,7 +48,6 @@ def sla_dagpiek_op(s, g):
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag_iso},{s},{g}")
 
-# --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
@@ -77,20 +58,19 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# LIVE DATA OPHALEN
+# LIVE DATA
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN (TRIGGER 14:28) ---
+# --- AUTO-ARCHIVEREN (Trigger 14:38) ---
 target_uur = 14
-target_min = 28
+target_min = 38
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
@@ -105,19 +85,12 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Gearchiveerd naar Google Sheets!")
+                st.toast("🚀 Gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
-
-forecast = get_weather_forecast()
-if forecast:
-    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
-    t_max = forecast['temperature_2m_max'][0]
-    z_straling = forecast['shortwave_radiation_sum'][0]
-    st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 
@@ -151,8 +124,6 @@ st.divider()
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
-else:
-    st.warning("Geen data gevonden in de Google Sheet.")
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)

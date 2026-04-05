@@ -13,7 +13,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw2FVnk85VhZqhr_QL7e-nN_KRVSxiVVVrDrkOdYQYK5QPDa-wWe9bUaocstvH0mrsQ/exec"
+WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -27,7 +27,7 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- FUNCTIE: WEER DATA OPHALEN ---
+# --- FUNCTIE: WEER DATA OPHALEN (Tongeren-Borgloon) ---
 def get_weather():
     try:
         # Coördinaten voor regio Tongeren-Borgloon
@@ -42,9 +42,11 @@ def laad_dagpiek():
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
-                parts = f.read().split(",")
-                if parts[0] == vandaag:
-                    return float(parts[1]), float(parts[2])
+                content = f.read().strip()
+                if content:
+                    parts = content.split(",")
+                    if parts[0] == vandaag:
+                        return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
 
@@ -85,7 +87,7 @@ if val_g > st.session_state.p_galvo_peak:
 if update_cache:
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- DATA LADEN UIT SHEET ---
+# --- DATA LADEN UIT SHEET VOOR RECORD ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -121,7 +123,7 @@ if nu_lokaal.hour == 23:
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro")
 
-# --- NIEUW: WEER DISPLAY BOVENAAN ---
+# --- WEER DISPLAY BOVENAAN ---
 if current_w:
     w1, w2, w3 = st.columns(3)
     w1.metric("🌡️ Nu", f"{current_w['temperature']}°C")

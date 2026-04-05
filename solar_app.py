@@ -17,7 +17,7 @@ SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
 # Jouw unieke Google Script URL
-WEBAPP_URL = "https://google.com" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -74,7 +74,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 
 # --- AUTO-ARCHIVEREN (TRIGGER 14:32) ---
 target_uur = 14
-target_min = 32
+target_min = 40
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""

@@ -8,14 +8,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - VOLLEDIGE INTEGRATIE ☀️
+# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-
-# JOUW PERSOONLIJKE LINK (NU CORRECT INGEVULD):
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw2FVnk85VhZqhr_QL7e-nN_KRVSxiVVVrDrkOdYQYK5QPDa-wWe9bUaocstvH0mrsQ/exec"
+WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -78,7 +76,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken
+# Update Dagpieken in geheugen
 update_cache = False
 if val_s > st.session_state.p_symo_peak:
     st.session_state.p_symo_peak = val_s
@@ -98,9 +96,9 @@ if val_t > historical_max and not st.session_state.record_celebrated:
 elif val_t <= historical_max:
     st.session_state.record_celebrated = False
 
-# --- AUTO-LOGICA (23:00) ---
+# --- AUTO-LOGICA (ARCHIVEREN OM 23:00) ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 8 and nu_lokaal.minute == 38:
+if nu_lokaal.hour == 23:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
@@ -119,18 +117,6 @@ if nu_lokaal.hour == 8 and nu_lokaal.minute == 38:
 st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
-
-# --- TEST KNOP ---
-if st.button("🧪 TEST: Sla nu op in Google Sheet"):
-    params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
-    try:
-        r = requests.get(WEBAPP_URL, params=params)
-        if r.status_code == 200:
-            st.success("✅ Het werkt! Check je Sheet.")
-        else:
-            st.error(f"❌ Fout bij Google Script (Code: {r.status_code}).")
-    except Exception as e:
-        st.error(f"Kon geen verbinding maken: {e}")
 
 st.divider()
 
@@ -153,6 +139,6 @@ if not table_df.empty:
 else:
     st.info("Tabel wordt geladen...")
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 8:33")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
 time.sleep(2)
 st.rerun()

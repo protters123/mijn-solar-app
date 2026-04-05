@@ -12,9 +12,8 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-# Pas deze WEBAPP_URL aan naar de URL van je Google Apps Script
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxwClGZryn1ZbtLWqAQs5LF98WVm0ANb5rOyjgbYG9xQXHEjfgWG5RUbfXGXf8B4Xbb/exec" 
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -27,26 +26,6 @@ tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
-
-# --- WEER INTERPRETATIE ---
-def vertaal_weer(code):
-    mapping = {
-        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
-        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
-    }
-    return mapping.get(code, ("Variabel", "🌡️"))
-
-@st.cache_data(ttl=3600)
-def get_weather_forecast():
-    try:
-        url = "https://api.open-meteo.com/v1/forecast?latitude=50.7805&longitude=5.4648&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin&forecast_days=1"
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200:
-            return r.json()["daily"]
-        return None
-    except:
-        return None
 
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
@@ -69,7 +48,10 @@ def sla_dagpiek_op(s, g):
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
-    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
+    st.session_state.p_symo_peak = s_start
+    st.session_state.p_galvo_peak = g_start
+if 'record_celebrated' not in st.session_state:
+    st.session_state.record_celebrated = False
 
 def fetch_status(url):
     try:
@@ -88,23 +70,19 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN OM 23:00 ---
-# --- AUTO-ARCHIVEREN OM 23:00 ---
+# --- AUTOMATISCHE TEST CHECK (13:18) ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
-
-# De check op 23:00 uur lokale tijd
-# --- DEBUGGING TIJDZONE CHECK ---
 huidig_uur = nu_lokaal.hour
 huidige_minuut = nu_lokaal.minute
-st.write(f"⏰ De app denkt dat het nu **{huidig_uur}:{huidige_minuut:02d}** is.")
 
-# We zetten de testtijd nu op 13:12 zodat je tijd hebt om op te slaan
-if huidig_uur == 13 and huidige_minuut == 10:
+# Deze tekst laat je op het scherm zien of de app de juiste tijd heeft
+st.write(f"⏰ App-tijd: {huidig_uur}:{huidige_minuut:02d} (Wacht op 13:18)")
+
+if huidig_uur == 13 and huidige_minuut == 18:
+    laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
-    else:
-        laatst_datum = ""
-        
+    
     if laatst_datum != vandaag:
         params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
@@ -112,35 +90,11 @@ if huidig_uur == 13 and huidige_minuut == 10:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
                 st.balloons()
-                st.success("✅ AUTOMATISCH VERZONDEN!")
+                st.success("🚀 AUTOMAAT: Data succesvol naar Google Sheets gestuurd!")
         except: pass
-
-
-    
-    # Alleen archiveren als we dat vandaag nog niet gedaan hebben
-    if laatst_datum != vandaag:
-        params = {
-            "symo": int(st.session_state.p_symo_peak), 
-            "galvo": int(st.session_state.p_galvo_peak)
-        }
-        try:
-            r = requests.get(WEBAPP_URL, params=params, timeout=15)
-            if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
-        except: pass
-
 
 # --- UI DASHBOARD ---
-st.title("☀️ Solar Piek") 
-
-forecast = get_weather_forecast()
-if forecast:
-    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
-    t_max = forecast['temperature_2m_max'][0]
-    z_straling = forecast['shortwave_radiation_sum'][0]
-    st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
-
+st.title("☀️ Solar Piek Pro") 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 
 # --- DATA LADEN UIT SHEET ---
@@ -169,7 +123,6 @@ with c2:
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
-
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))

@@ -15,7 +15,7 @@ SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
 # VERGEET NIET: Vervang "https://google.com" door je ECHTE Google Script URL
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxwClGZryn1ZbtLWqAQs5LF98WVm0ANb5rOyjgbYG9xQXHEjfgWG5RUbfXGXf8B4Xbb/exec" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -91,7 +91,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 
 # --- AUTO-ARCHIVEREN LOGICA (13:52) ---
 target_uur = 14
-target_min = 05
+target_min = 08
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
@@ -118,7 +118,7 @@ st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({nu_lokaal.strftime('%d-
 
 # De trigger op de achtergrond (nu op 13:52)
 target_uur = 14
-target_min = 05
+target_min = 08
 
 
 forecast = get_weather_forecast()

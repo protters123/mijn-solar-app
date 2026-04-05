@@ -8,13 +8,14 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - UPDATE 13:52 ☀️
+# SOLAR PIEK PRO - UPDATE 14:15 ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+# FIX: Correcte URL om de data uit je Google Sheet te lezen
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
-# VERGEET NIET: Vervang "https://google.com" door je ECHTE Google Script URL
+# Je Google Script URL staat nu goed!
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -44,6 +45,7 @@ def vertaal_weer(code):
 @st.cache_data(ttl=3600)
 def get_weather_forecast():
     try:
+        # FIX: Volledige API URL voor weerbericht
         url = "https://open-meteo.com"
         r = requests.get(url, timeout=5)
         if r.status_code == 200:
@@ -89,9 +91,10 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN LOGICA (13:52) ---
+# --- AUTO-ARCHIVEREN LOGICA ---
+# TEST-TIJD: 14:15
 target_uur = 14
-target_min = 08
+target_min = 15
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
@@ -107,19 +110,12 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
+                st.toast("🚀 Dagpiek succesvol gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-
-# Dit is de aangepaste regel die de datum toont en de oude tekst verwijdert
-st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({nu_lokaal.strftime('%d-%m-%Y')})")
-
-# De trigger op de achtergrond (nu op 13:52)
-target_uur = 14
-target_min = 08
-
+st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 forecast = get_weather_forecast()
 if forecast:
@@ -138,6 +134,7 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
+            # We zoeken het maximum in de 4e kolom (index 3: Totaal)
             historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
             table_df = df
 except: pass

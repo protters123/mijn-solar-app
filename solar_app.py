@@ -89,28 +89,30 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- AUTO-ARCHIVEREN OM 23:00 ---
-# --- HANDMATIGE TEST KNOP ---
-st.divider()
-st.subheader("🧪 Test Archivering")
+# --- AUTO-ARCHIVEREN OM 23:00 ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
 
-if st.button("🚀 Verstuur NU naar Google Sheets"):
-    params = {
-        "symo": int(st.session_state.p_symo_peak), 
-        "galvo": int(st.session_state.p_galvo_peak)
-    }
-    try:
-        # We voeren de aanroep direct uit naar jouw Script URL
-        r = requests.get(WEBAPP_URL, params=params, timeout=15)
-        if r.status_code == 200:
-            st.balloons()
-            st.success(f"✅ Succes! Check je Google Sheet. (Antwoord: {r.text})")
-        else:
-            st.error(f"Fout: Google geeft code {r.status_code} terug.")
-    except Exception as e:
-        st.error(f"Verbindingsfout: {e}")
+# De check op 23:00 uur lokale tijd
+if nu_lokaal.hour == 23:
+    laatst_datum = ""
+    if os.path.exists(ARCHIVE_LOG):
+        try:
+            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
+        except: pass
+    
+    # Alleen archiveren als we dat vandaag nog niet gedaan hebben
+    if laatst_datum != vandaag:
+        params = {
+            "symo": int(st.session_state.p_symo_peak), 
+            "galvo": int(st.session_state.p_galvo_peak)
+        }
+        try:
+            r = requests.get(WEBAPP_URL, params=params, timeout=15)
+            if r.status_code == 200:
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
+                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
+        except: pass
 
-st.divider()
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 

@@ -12,7 +12,7 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -27,20 +27,16 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER FUNCTIE (Tongeren-Borgloon) ---
-@st.cache_data(ttl=3600)
-def get_weather_forecast(lat=50.78, lon=5.41):
+# --- FIX: ROBUUSTE WEER FUNCTIE ---
+@st.cache_data(ttl=3600) # Cache voor 1 uur tegen API-blocking
+def get_weather_forecast():
     try:
+        # Coördinaten Tongeren-Borgloon
         url = "https://open-meteo.com"
-        params = {
-            "latitude": lat,
-            "longitude": lon,
-            "daily": ["temperature_2m_max", "shortwave_radiation_sum"],
-            "timezone": "Europe/Berlin"
-        }
-        r = requests.get(url, params=params, timeout=5)
-        r.raise_for_status()
-        return r.json()["daily"]
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            return r.json()["daily"]
+        return None
     except:
         return None
 
@@ -76,7 +72,7 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA LADEN UIT SHEET ---
+# --- DATA LADEN ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -94,23 +90,20 @@ val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
 # Update Dagpieken
-update_cache = False
-if val_s > st.session_state.p_symo_peak:
-    st.session_state.p_symo_peak = val_s
-    update_cache = True
-if val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_galvo_peak = val_g
-    update_cache = True
-if update_cache:
+if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
+    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
+    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# Record Waarschuwing op basis van weer
+# --- WEERSVERWACHTING LOGICA ---
 forecast = get_weather_forecast()
-if forecast and forecast['shortwave_radiation_sum'][0] > 20:
-    st.warning(f"🚀 **Potentieel Recordweer!** Vandaag wordt {forecast['shortwave_radiation_sum'][0]} MJ/m² straling verwacht.")
+if forecast:
+    solar_vandaag = forecast['shortwave_radiation_sum'][0]
+    if solar_vandaag > 20:
+        st.warning(f"🚀 **Potentieel Recordweer!** Vandaag: {solar_vandaag} MJ/m² straling.")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 current_all_time = max(historical_max, val_t)
@@ -130,16 +123,16 @@ with c2:
 
 st.divider()
 
-# --- WEERSVOORSPELLING SECTIE ---
-st.subheader("🌤️ Weersverwachting (Tongeren-Borgloon)")
+# --- DISPLAY WEERSVOORSPELLING ---
+st.subheader("🌤️ Weer in Tongeren-Borgloon")
 if forecast:
-    wf1, wf2 = st.columns(2)
-    with wf1:
+    w1, w2 = st.columns(2)
+    with w1:
         st.info(f"**Vandaag**\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
-    with wf2:
+    with w2:
         st.info(f"**Morgen**\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][1]} MJ/m²")
 else:
-    st.error("Weergegevens tijdelijk niet beschikbaar.")
+    st.error("Weerdata kon niet worden opgehaald.")
 
 st.divider()
 

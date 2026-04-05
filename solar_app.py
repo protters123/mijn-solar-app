@@ -12,7 +12,7 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -27,7 +27,7 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER FUNCTIE (Tongeren/Borgloon) ---
+# --- WEER FUNCTIE (Regio Tongeren-Borgloon) ---
 @st.cache_data(ttl=3600)
 def get_weather_forecast(lat=50.78, lon=5.41):
     try:
@@ -81,27 +81,34 @@ try:
             table_df = df
 except: pass
 
-# --- LIVE DATA & LOGICA ---
+# --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
+# Update Dagpieken
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-current_all_time = max(historical_max, val_t)
-
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- NIEUW: RECORD WAARSCHUWING LOGICA ---
+# Record Check
+current_all_time = max(historical_max, val_t)
+if val_t > historical_max and not st.session_state.record_celebrated:
+    st.balloons()
+    st.session_state.record_celebrated = True
+elif val_t <= historical_max:
+    st.session_state.record_celebrated = False
+
+# Weer ophalen voor waarschuwing
 forecast = get_weather_forecast()
 if forecast:
-    max_straling = max(forecast['shortwave_radiation_sum'][0], forecast['shortwave_radiation_sum'][1])
-    if max_straling > 20: # Drempelwaarde voor zeer zonnige dag
-        st.success(f"🚀 **Potentieel Recordweer!** Er wordt {max_straling} MJ/m² straling verwacht. Hou de meters in de gaten!")
+    solar_vandaag = forecast['shortwave_radiation_sum'][0]
+    if solar_vandaag > 22:
+        st.warning(f"🔥 **RECORD ALARM:** Vandaag wordt extreem veel zon verwacht ({solar_vandaag} MJ/m²). Maak je borst maar nat!")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
@@ -120,16 +127,30 @@ with c2:
 
 st.divider()
 
-# --- WEERSVOORSPELLING ---
+# --- WEERSVOORSPELLING MET KLEUR-LOGICA ---
 st.subheader("🌤️ Weersverwachting (Regio Tongeren)")
 if forecast:
     wf1, wf2 = st.columns(2)
+    
+    # Vandaag
     with wf1:
-        st.info(f"**Vandaag**\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
+        color_v = "orange" if forecast['shortwave_radiation_sum'][0] > 18 else "int"
+        label_v = "☀️ Zonnig" if forecast['shortwave_radiation_sum'][0] > 18 else "☁️ Bewolkt/Variabel"
+        if color_v == "orange":
+            st.success(f"**Vandaag** ({label_v})\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
+        else:
+            st.info(f"**Vandaag** ({label_v})\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
+            
+    # Morgen
     with wf2:
-        st.info(f"**Morgen**\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][1]} MJ/m²")
+        color_m = "orange" if forecast['shortwave_radiation_sum'][1] > 18 else "int"
+        label_m = "☀️ Zonnig" if forecast['shortwave_radiation_sum'][1] > 18 else "☁️ Bewolkt/Variabel"
+        if color_m == "orange":
+            st.success(f"**Morgen** ({label_m})\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][1]} MJ/m²")
+        else:
+            st.info(f"**Morgen** ({label_m})\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][1]} MJ/m²")
 else:
-    st.warning("Weergegevens tijdelijk niet beschikbaar.")
+    st.error("Weergegevens konden niet worden geladen.")
 
 st.divider()
 

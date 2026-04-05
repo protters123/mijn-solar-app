@@ -12,7 +12,8 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# FIX: De link moet exact zo zijn (met /spreadsheets/d/)
+
+# FIX: De link moet exact zo zijn om de data uit de Sheet te kunnen lezen
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
@@ -68,9 +69,9 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN (Trigger 14:38) ---
+# --- AUTO-ARCHIVEREN (Trigger om 14:48) ---
 target_uur = 14
-target_min = 38
+target_min = 48
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
@@ -102,6 +103,7 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
+            # Pakt het maximum uit kolom 4 (index 3)
             historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
             table_df = df
 except Exception as e:
@@ -124,6 +126,8 @@ st.divider()
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
+else:
+    st.info("De tabel wordt geladen zodra de verbinding hersteld is...")
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)

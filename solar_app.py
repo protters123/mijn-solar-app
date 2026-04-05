@@ -27,12 +27,12 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER FUNCTIE (Tongeren/Borgloon: 50.78, 5.41) ---
-@st.cache_data(ttl=3600) # Update slechts 1x per uur
-def get_weather_forecast(lat=50.78, lon=5.41):
+# --- NIEUW: WEER FUNCTIE (Cache voor 1 uur om API-limiet te voorkomen) ---
+@st.cache_data(ttl=3600)
+def get_weather_forecast(lat=50.78, lon=5.41): # Coördinaten Tongeren-Borgloon
     try:
         url = f"https://open-meteo.com{lat}&longitude={lon}&daily=temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin"
-        r = requests.get(url, timeout=3).json()
+        r = requests.get(url, timeout=5).json()
         return r['daily']
     except:
         return None
@@ -130,7 +130,6 @@ st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
 
 st.divider()
 
-# --- LIVE METRICS ---
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
@@ -143,18 +142,19 @@ with c2:
 
 st.divider()
 
-# --- WEERSVOORSPELLING ---
+# --- NIEUW: WEERSVOORSPELLING SECTIE ---
 st.subheader("🌤️ Weersverwachting (Regio Tongeren)")
 forecast = get_weather_forecast()
 
-if forecast:
+if forecast and 'temperature_2m_max' in forecast:
     wf1, wf2 = st.columns(2)
+    # Index 0 is vandaag, index 1 is morgen
     with wf1:
         st.info(f"**Vandaag**\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
     with wf2:
         st.info(f"**Morgen**\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][1]} MJ/m²")
 else:
-    st.warning("Weergegevens niet beschikbaar.")
+    st.warning("Weergegevens tijdelijk niet beschikbaar.")
 
 st.divider()
 

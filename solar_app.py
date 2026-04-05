@@ -21,39 +21,21 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
-def get_weather_forecast(lat=50.85, lon=4.35): # Coördinaten van Brussel als default
-    try:
-        # We halen temperatuur en geschatte zonnestraling op voor vandaag en morgen
-        url = f"https://open-meteo.com{lat}&longitude={lon}&daily=temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin"
-        r = requests.get(url, timeout=3).json()
-        return r['daily']
-    except:
-        return None
-# --- WEERSVOORSPELLING SECTIE ---
-st.subheader("🌤️ Weersverwachting (Solar)")
-forecast = get_weather_forecast(lat=50.85, lon=4.35) # Pas hier je eigen breedte/lengtegraad aan
-
-if forecast:
-    wf1, wf2 = st.columns(2)
-    with wf1:
-        st.write("**Vandaag**")
-        st.metric("Temp", f"{forecast['temperature_2m_max'][0]}°C")
-        st.write(f"Straling: {forecast['shortwave_radiation_sum'][0]} MJ/m²")
-    with wf2:
-        st.write("**Morgen**")
-        st.metric("Temp", f"{forecast['temperature_2m_max'][1]}°C")
-        st.write(f"Straling: {forecast['shortwave_radiation_sum'][1]} MJ/m²")
-else:
-    st.info("Weergegevens tijdelijk niet beschikbaar.")
-
-st.divider()
-
-
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
+
+# --- WEER FUNCTIE (Tongeren/Borgloon: 50.78, 5.41) ---
+@st.cache_data(ttl=3600) # Update slechts 1x per uur
+def get_weather_forecast(lat=50.78, lon=5.41):
+    try:
+        url = f"https://open-meteo.com{lat}&longitude={lon}&daily=temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin"
+        r = requests.get(url, timeout=3).json()
+        return r['daily']
+    except:
+        return None
 
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
@@ -148,6 +130,7 @@ st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
 
 st.divider()
 
+# --- LIVE METRICS ---
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
@@ -160,6 +143,21 @@ with c2:
 
 st.divider()
 
+# --- WEERSVOORSPELLING ---
+st.subheader("🌤️ Weersverwachting (Regio Tongeren)")
+forecast = get_weather_forecast()
+
+if forecast:
+    wf1, wf2 = st.columns(2)
+    with wf1:
+        st.info(f"**Vandaag**\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
+    with wf2:
+        st.info(f"**Morgen**\n\n🌡️ {forecast['temperature_2m_max'][1]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][1]} MJ/m²")
+else:
+    st.warning("Weergegevens niet beschikbaar.")
+
+st.divider()
+
 # --- TABEL SECTIE ---
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
@@ -167,6 +165,6 @@ if not table_df.empty:
 else:
     st.info("Tabel wordt geladen...")
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)
 st.rerun()

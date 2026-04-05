@@ -97,7 +97,7 @@ huidige_minuut = nu_lokaal.minute
 # Visuele hulp om te zien of de tijd in de app klopt met jouw klok
 st.write(f"🕒 App-tijd: {huidig_uur}:{huidige_minuut:02d} (Wacht op 12:56)")
 
-if huidig_uur == 12 and huidige_minuut == 55:
+if huidig_uur == 12 and huidige_minuut == 56:
     # Check of we vandaag al geschreven hebben
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):

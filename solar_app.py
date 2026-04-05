@@ -71,32 +71,36 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- AUTO-ARCHIVEREN LOGICA (13:45) ---
+# --- AUTO-ARCHIVEREN LOGICA (Aangepast naar 13:52) ---
 target_uur = 13
-target_min = 45
+target_min = 52
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     vandaag_sleutel = nu_lokaal.strftime('%Y-%m-%d')
     laatst_datum = ""
+    
+    # Controleer of de archief-log bestaat om dubbel schrijven te voorkomen
     if os.path.exists(ARCHIVE_LOG):
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     
-    # Check of we vandaag al geschreven hebben
+    # Alleen schrijven als we dit vandaag nog niet gedaan hebben op dit tijdstip
     if laatst_datum != vandaag_sleutel:
-        # We sturen de hoogste pieken van vandaag door naar de Google Sheet
         params = {
             "symo": int(st.session_state.p_symo_peak), 
             "galvo": int(st.session_state.p_galvo_peak)
         }
         try:
+            # Hier wordt de data naar je Google Script gestuurd
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_sleutel)
                 st.balloons()
-                st.toast("✅ Piekmomenten succesvol naar Sheet geschreven!")
+                st.toast("✅ Piekmomenten om 13:52 naar Sheet geschreven!")
         except Exception as e:
             st.error(f"Fout bij schrijven naar Sheet: {e}")
+
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 

@@ -95,7 +95,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 # --- AUTO-ARCHIVEREN LOGICA ---
 # Aangepast naar 13:35 zoals gevraagd
 target_uur = 13
-target_min = 35
+target_min = 47
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     vandaag_sleutel = nu_lokaal.strftime('%Y-%m-%d')

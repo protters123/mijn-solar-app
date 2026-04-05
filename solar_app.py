@@ -8,13 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - VERSIE 13:45 ARCHIVE ☀️
+# SOLAR PIEK PRO - UPDATE 13:52 ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
-# VUL HIER JE ECHTE GOOGLE SCRIPT URL IN
+# VERGEET NIET: Vervang "https://google.com" door je ECHTE Google Script URL
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxwClGZryn1ZbtLWqAQs5LF98WVm0ANb5rOyjgbYG9xQXHEjfgWG5RUbfXGXf8B4Xbb/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -26,27 +26,46 @@ st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
-vandaag_str = nu_lokaal.strftime('%d-%m-%Y')
+vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
+vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
+
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
+# --- WEER INTERPRETATIE ---
+def vertaal_weer(code):
+    mapping = {
+        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
+        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
+        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
+    }
+    return mapping.get(code, ("Variabel", "🌡️"))
+
+@st.cache_data(ttl=3600)
+def get_weather_forecast():
+    try:
+        url = "https://open-meteo.com"
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            return r.json()["daily"]
+        return None
+    except: return None
+
 def laad_dagpiek():
-    vandaag = nu_lokaal.strftime('%Y-%m-%d')
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    if parts[0] == vandaag:
+                    if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
 
 def sla_dagpiek_op(s, g):
-    vandaag = nu_lokaal.strftime('%Y-%m-%d')
     with open(CACHE_FILE, "w") as f:
-        f.write(f"{vandaag},{s},{g}")
+        f.write(f"{vandaag_iso},{s},{g}")
 
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
@@ -64,52 +83,62 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken in het geheugen
+# Update Dagpieken
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN LOGICA (13:45) ---
-# --- AUTO-ARCHIVEREN LOGICA (Aangepast naar 13:52) ---
+# --- AUTO-ARCHIVEREN LOGICA (13:52) ---
 target_uur = 13
-target_min = 57
+target_min = 52
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
-    vandaag_sleutel = nu_lokaal.strftime('%Y-%m-%d')
     laatst_datum = ""
-    
-    # Controleer of de archief-log bestaat om dubbel schrijven te voorkomen
     if os.path.exists(ARCHIVE_LOG):
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     
-    # Alleen schrijven als we dit vandaag nog niet gedaan hebben op dit tijdstip
-    if laatst_datum != vandaag_sleutel:
-        params = {
-            "symo": int(st.session_state.p_symo_peak), 
-            "galvo": int(st.session_state.p_galvo_peak)
-        }
+    if laatst_datum != vandaag_iso:
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
-            # Hier wordt de data naar je Google Script gestuurd
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_sleutel)
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("✅ Piekmomenten om 13:52 naar Sheet geschreven!")
-        except Exception as e:
-            st.error(f"Fout bij schrijven naar Sheet: {e}")
-
+                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
+        except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-# Aangepaste regel: App-tijd met de datum tussen haakjes
-st.write(f"⏰ App-tijd: {nu_lokaal.hour}:{nu_lokaal.minute:02d} ({vandaag_str})")
+# Hier staat nu de gevraagde App-tijd en datum
+st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 forecast = get_weather_forecast()
+if forecast:
+    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
+    t_max = forecast['temperature_2m_max'][0]
+    z_straling = forecast['shortwave_radiation_sum'][0]
+    st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 
-# Kolommen voor de individuele pieken
+st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
+
+# --- DATA LADEN UIT SHEET ---
+historical_max = 3729.0
+table_df = pd.DataFrame()
+try:
+    res = requests.get(CSV_URL, timeout=10)
+    if res.status_code == 200:
+        df = pd.read_csv(io.StringIO(res.text))
+        if not df.empty:
+            historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
+            table_df = df
+except: pass
+
+st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
+st.divider()
+
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f"### {icon_s} Symo")
@@ -121,7 +150,10 @@ with c2:
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
-st.caption(f"Laatste update: {nu_lokaal.strftime('%H:%M:%S')}")
+st.subheader("💚 Maandoverzicht") 
+if not table_df.empty:
+    st.table(table_df.iloc[::-1].head(15))
 
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)
 st.rerun()

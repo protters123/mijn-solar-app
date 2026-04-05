@@ -89,25 +89,31 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- AUTO-ARCHIVEREN OM 23:00 ---
+# --- TIJDELIJKE TEST LOGICA (vandaag om 12:40) ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 21:
+# We checken nu specifiek op uur 12 en minuut 40
+if nu_lokaal.hour == 12 and nu_lokaal.min == 41:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     
+    # Als we vandaag nog niet gearchiveerd hebben, doe het nu
     if laatst_datum != vandaag:
         params = {
             "symo": int(st.session_state.p_symo_peak), 
             "galvo": int(st.session_state.p_galvo_peak)
         }
         try:
+            # Let op: zorg dat je WEBAPP_URL bovenaan correct is ingevuld!
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
-        except: pass
+                st.toast("🚀 TEST: Dagpiek succesvol gearchiveerd!")
+        except Exception as e:
+            st.error(f"Fout bij archiveren: {e}")
+
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 

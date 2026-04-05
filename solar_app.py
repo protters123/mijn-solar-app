@@ -91,7 +91,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 
 # --- AUTO-ARCHIVEREN LOGICA (13:52) ---
 target_uur = 14
-target_min = 04
+target_min = 05
 
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""

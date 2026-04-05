@@ -112,8 +112,14 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-# Hier staat nu de gevraagde App-tijd en datum
-st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
+
+# Dit is de aangepaste regel die de datum toont en de oude tekst verwijdert
+st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({nu_lokaal.strftime('%d-%m-%Y')})")
+
+# De trigger op de achtergrond (nu op 13:52)
+target_uur = 14
+target_min = 05
+
 
 forecast = get_weather_forecast()
 if forecast:

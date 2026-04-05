@@ -27,7 +27,7 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- WEER INTERPRETATIE ---
+# --- WEER INTERPRETATIE (Zon, Regen, Mist, etc.) ---
 def vertaal_weer(code):
     mapping = {
         0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
@@ -40,7 +40,7 @@ def vertaal_weer(code):
 @st.cache_data(ttl=3600)
 def get_weather_forecast():
     try:
-        # Locatie: Tongeren-Borgloon
+        # Locatie ingesteld op Tongeren-Borgloon (50.78, 5.41)
         url = "https://open-meteo.com"
         r = requests.get(url, timeout=10)
         if r.status_code == 200:
@@ -70,8 +70,7 @@ def sla_dagpiek_op(s, g):
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
-    st.session_state.p_symo_peak = s_start
-    st.session_state.p_galvo_peak = g_start
+    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
 
 def fetch_status(url):
     try:
@@ -79,50 +78,34 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA LADEN ---
-historical_max = 3729.0
-table_df = pd.DataFrame()
-try:
-    res = requests.get(CSV_URL, timeout=10)
-    if res.status_code == 200:
-        df = pd.read_csv(io.StringIO(res.text))
-        if not df.empty:
-            historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
-            table_df = df
-except: pass
-
 # --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
 # Update Dagpieken
-if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
-    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
-    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
+if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
+sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- NIEUW: WEER STATUS BALK ---
+# --- GECORRIGEERDE WEER SECTIE ---
 forecast = get_weather_forecast()
 if forecast:
-    # Cruciaal: Gebruik [0] om de data van VANDAAG te pakken
-    weer_status, weer_icoon = vertaal_weer(forecast['weather_code'][0])
+    # Hier zit de FIX: [0] pakt de waarde van vandaag uit de lijst
+    status_tekst, status_icoon = vertaal_weer(forecast['weather_code'][0])
     temp_v = forecast['temperature_2m_max'][0]
     zon_v = forecast['shortwave_radiation_sum'][0]
     
-    st.info(f"**Actueel weer:** {weer_icoon} {weer_status} | 🌡️ {temp_v}°C | ☀️ {zon_v} MJ/m²")
+    st.info(f"**Actueel weer:** {status_icoon} {status_tekst} | 🌡️ {temp_v}°C | ☀️ {zon_v} MJ/m²")
 else:
-    st.error("Weergegevens tijdelijk niet beschikbaar.")
+    st.error("Weergegevens konden niet worden geladen (check internet).")
 
 st.divider()
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-current_all_time = max(historical_max, val_t)
-st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
-
 st.divider()
 
 c1, c2 = st.columns(2)
@@ -135,13 +118,6 @@ with c2:
     st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
-st.divider()
-
-# --- TABEL ---
-st.subheader("💚 Maandoverzicht") 
-if not table_df.empty:
-    st.table(table_df.iloc[::-1].head(15))
-
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
+st.caption(f"Laatste update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)
 st.rerun()

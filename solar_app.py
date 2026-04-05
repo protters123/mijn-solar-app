@@ -21,6 +21,16 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
 
+def get_weather_forecast(lat=50.85, lon=4.35): # Coördinaten van Brussel als default
+    try:
+        # We halen temperatuur en geschatte zonnestraling op voor vandaag en morgen
+        url = f"https://open-meteo.com{lat}&longitude={lon}&daily=temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin"
+        r = requests.get(url, timeout=3).json()
+        return r['daily']
+    except:
+        return None
+
+
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)

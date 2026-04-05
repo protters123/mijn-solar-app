@@ -8,11 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️
+# SOLAR PIEK PRO - DEFINITIEVE VERSIE + WEER ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+
+# JE PERSOONLIJKE LINK IS HIER HERSTELD:
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -26,6 +28,26 @@ tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
+
+# --- FUNCTIE: WEER OPHALEN (Tongeren-Borgloon) ---
+def get_weather():
+    try:
+        # Weercodes vertalen naar icoontjes
+        url = "https://open-meteo.com"
+        res = requests.get(url, timeout=3).json()
+        code = res['current_weather']['weathercode']
+        
+        icon = "☁️"
+        if code == 0: icon = "☀️"
+        elif code in [1, 2, 3]: icon = "🌤️"
+        elif code in [45, 48]: icon = "🌫️"
+        elif code in [51, 53, 55, 61, 63, 65]: icon = "🌧️"
+        elif code in [80, 81, 82]: icon = "🌦️"
+        elif code in [95, 96, 99]: icon = "⛈️"
+        
+        return res['current_weather'], res['daily'], icon
+    except:
+        return None, None, "☁️"
 
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
@@ -59,22 +81,11 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA LADEN UIT SHEET ---
-historical_max = 3729.0
-table_df = pd.DataFrame()
-try:
-    res = requests.get(CSV_URL, timeout=10)
-    if res.status_code == 200:
-        df = pd.read_csv(io.StringIO(res.text))
-        if not df.empty:
-            historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
-            table_df = df
-except: pass
-
-# --- LIVE DATA OPHALEN ---
+# --- LIVE DATA & WEER OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
+current_w, daily_w, w_icon = get_weather()
 
 # Update Dagpieken in geheugen
 update_cache = False
@@ -87,6 +98,18 @@ if val_g > st.session_state.p_galvo_peak:
 
 if update_cache:
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+
+# --- DATA LADEN UIT SHEET ---
+historical_max = 3729.0
+table_df = pd.DataFrame()
+try:
+    res = requests.get(CSV_URL, timeout=10)
+    if res.status_code == 200:
+        df = pd.read_csv(io.StringIO(res.text))
+        if not df.empty:
+            historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
+            table_df = df
+except: pass
 
 # --- RECORD CHECK & BALLONNEN ---
 current_all_time = max(historical_max, val_t)
@@ -115,6 +138,15 @@ if nu_lokaal.hour == 23:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
+
+# --- WEER DISPLAY BOVENAAN ---
+if current_w:
+    w1, w2, w3 = st.columns(3)
+    w1.metric(f"{w_icon} Nu", f"{current_w['temperature']}°C")
+    w2.metric("🌤️ Max", f"{daily_w['temperature_2m_max']}°C")
+    w3.metric("⛱️ UV Index", f"{daily_w['uv_index_max']}")
+    st.divider()
+
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
 

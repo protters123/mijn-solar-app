@@ -88,24 +88,24 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN OM 23:00 ---
-vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
+# --- AUTO-ARCHIVEREN (Trigger om 20:30) ---
+target_uur = 20
+target_min = 30
+
+if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     
-    if laatst_datum != vandaag:
-        params = {
-            "symo": int(st.session_state.p_symo_peak), 
-            "galvo": int(st.session_state.p_galvo_peak)
-        }
+    if laatst_datum != vandaag_iso:
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
+                st.balloons()
                 st.toast("🚀 Dagpiek automatisch gearchiveerd!")
         except: pass
 

@@ -12,8 +12,9 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://google.com"
+# FIX: Correcte URL voor Google Sheets export
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -50,14 +51,50 @@ if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak = s_start
     st.session_state.p_galvo_peak = g_start
-if 'record_celebrated' not in st.session_state:
-    st.session_state.record_celebrated = False
 
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
+
+# --- LIVE DATA OPHALEN ---
+val_s, icon_s = fetch_status(URL_1)
+val_g, icon_g = fetch_status(URL_2)
+val_t = val_s + val_g
+
+# Update Dagpieken
+if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
+    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
+    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
+    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
+
+# --- AUTOMATISCHE TEST CHECK (13:18) ---
+vandaag = nu_lokaal.strftime('%Y-%m-%d')
+huidig_uur = nu_lokaal.hour
+huidige_minuut = nu_lokaal.minute
+
+# Visuele tijdcheck
+st.write(f"⏰ App-tijd: {huidig_uur}:{huidige_minuut:02d} (Wacht op 13:18)")
+
+if huidig_uur == 13 and huidige_minuut == 18:
+    laatst_datum = ""
+    if os.path.exists(ARCHIVE_LOG):
+        with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
+    
+    if laatst_datum != vandaag:
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
+        try:
+            r = requests.get(WEBAPP_URL, params=params, timeout=15)
+            if r.status_code == 200:
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
+                st.balloons()
+                st.success("🚀 AUTOMAAT: Data succesvol naar Google Sheets gestuurd!")
+        except: pass
+
+# --- UI DASHBOARD ---
+st.title("☀️ Solar Piek Pro") 
+st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
@@ -71,53 +108,7 @@ try:
             table_df = df
 except: pass
 
-# --- LIVE DATA OPHALEN ---
-val_s, icon_s = fetch_status(URL_1)
-val_g, icon_g = fetch_status(URL_2)
-val_t = val_s + val_g
-
-# Update Dagpieken in geheugen
-update_cache = False
-if val_s > st.session_state.p_symo_peak:
-    st.session_state.p_symo_peak = val_s
-    update_cache = True
-if val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_galvo_peak = val_g
-    update_cache = True
-
-if update_cache:
-    sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
-
-# --- RECORD CHECK & BALLONNEN ---
-current_all_time = max(historical_max, val_t)
-if val_t > historical_max and not st.session_state.record_celebrated:
-    st.balloons()
-    st.session_state.record_celebrated = True
-elif val_t <= historical_max:
-    st.session_state.record_celebrated = False
-
-# --- AUTO-LOGICA (ARCHIVEREN OM 23:00) ---
-vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
-    laatst_datum = ""
-    if os.path.exists(ARCHIVE_LOG):
-        try:
-            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
-        except: pass
-    if laatst_datum != vandaag:
-        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
-        try:
-            r = requests.get(WEBAPP_URL, params=params, timeout=15)
-            if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
-        except: pass
-
-# --- UI DASHBOARD ---
-st.title("☀️ Solar Piek Pro") 
-st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
-st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
-
+st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
 c1, c2 = st.columns(2)
@@ -131,15 +122,13 @@ with c2:
     st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
-
-# --- TABEL SECTIE ---
+# --- HERSTELD: MAANDOVERZICHT ---
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
 else:
-    st.info("Tabel wordt geladen...")
+    st.info("Tabel wordt geladen vanuit Google Sheets...")
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)
 st.rerun()
-

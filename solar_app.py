@@ -12,15 +12,14 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# FIX: Correcte URL structuur voor Google Sheets
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-st.set_page_config(page_title="Solar Piek Pro", page_icon="☀️", layout="centered")
+st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
 
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')

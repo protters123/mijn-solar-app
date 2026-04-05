@@ -8,13 +8,11 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - DEFINITIEVE VERSIE + WEER ☀️
+# SOLAR PIEK PRO - NU MET WEER-ICOONTJES ☀️🌧️☁️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-
-# JE PERSOONLIJKE LINK IS HIER HERSTELD:
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -29,14 +27,27 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- FUNCTIE: WEER OPHALEN (Tongeren-Borgloon) ---
+# --- FUNCTIE: WEERVERTALER ---
+def get_weather_icon(code):
+    # Vertaling van Open-Meteo codes naar icoontjes
+    if code == 0: return "☀️" # Onbewolkt
+    if code in [1, 2, 3]: return "🌤️" # Licht bewolkt
+    if code in [45, 48]: return "🌫️" # Mist
+    if code in [51, 53, 55, 61, 63, 65]: return "🌧️" # Regen
+    if code in [71, 73, 75, 77]: return "❄️" # Sneeuw
+    if code in [80, 81, 82]: return "🌦️" # Buien
+    if code in [95, 96, 99]: return "⛈️" # Onweer
+    return "☁️" # Bewolkt / Overig
+
+# --- FUNCTIE: WEER OPHALEN ---
 def get_weather():
     try:
         url = "https://open-meteo.com"
         res = requests.get(url, timeout=3).json()
-        return res['current_weather'], res['daily']
+        icon = get_weather_icon(res['current_weather']['weathercode'])
+        return res['current_weather'], res['daily'], icon
     except:
-        return None, None
+        return None, None, "☁️"
 
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
@@ -70,13 +81,13 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- LIVE DATA & WEER OPHALEN ---
+# --- LIVE DATA OPHALEN ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
-current_w, daily_w = get_weather()
+current_w, daily_w, weather_icon = get_weather()
 
-# Update Dagpieken in geheugen
+# Update Dagpieken
 update_cache = False
 if val_s > st.session_state.p_symo_peak:
     st.session_state.p_symo_peak = val_s
@@ -84,7 +95,6 @@ if val_s > st.session_state.p_symo_peak:
 if val_g > st.session_state.p_galvo_peak:
     st.session_state.p_galvo_peak = val_g
     update_cache = True
-
 if update_cache:
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
@@ -100,15 +110,13 @@ try:
             table_df = df
 except: pass
 
-# --- RECORD CHECK & BALLONNEN ---
+# --- RECORD CHECK ---
 current_all_time = max(historical_max, val_t)
 if val_t > historical_max and not st.session_state.record_celebrated:
     st.balloons()
     st.session_state.record_celebrated = True
-elif val_t <= historical_max:
-    st.session_state.record_celebrated = False
 
-# --- AUTO-LOGICA (ARCHIVEREN OM 23:00) ---
+# --- AUTO-LOGICA (23:00) ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
 if nu_lokaal.hour == 23:
     laatst_datum = ""
@@ -128,17 +136,16 @@ if nu_lokaal.hour == 23:
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
 
-# --- WEER DISPLAY BOVENAAN ---
+# --- WEER DISPLAY ---
 if current_w:
     w1, w2, w3 = st.columns(3)
-    w1.metric("🌡️ Nu", f"{current_w['temperature']}°C")
-    w2.metric("🌤️ Max Vandaag", f"{daily_w['temperature_2m_max'][0]}°C")
-    w3.metric("⛱️ UV Index", f"{daily_w['uv_index_max'][0]}")
+    w1.metric(f"{weather_icon} Nu", f"{current_w['temperature']}°C")
+    w2.metric("🌤️ Max", f"{daily_w['temperature_2m_max']}°C")
+    w3.metric("⛱️ UV Index", f"{daily_w['uv_index_max']}")
     st.divider()
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
-
 st.divider()
 
 c1, c2 = st.columns(2)

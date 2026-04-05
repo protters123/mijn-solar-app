@@ -92,7 +92,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 # --- TIJDELIJKE TEST LOGICA (vandaag om 12:40) ---
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
 # We checken nu specifiek op uur 12 en minuut 40
-if nu_lokaal.hour == 12 and nu_lokaal.min == 41:
+if nu_lokaal.hour == 12 and nu_lokaal.min == 45:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:

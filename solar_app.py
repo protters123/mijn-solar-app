@@ -89,36 +89,29 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
 # --- AUTO-ARCHIVEREN OM 23:00 ---
-# --- TIJDELIJKE TEST LOGICA (vandaag om 12:56) ---
+# --- HANDMATIGE TEST KNOP ---
+st.divider()
+st.subheader("🧪 Test Archivering")
 vandaag = nu_lokaal.strftime('%Y-%m-%d')
-huidig_uur = nu_lokaal.hour
-huidige_minuut = nu_lokaal.minute
 
-# Visuele hulp om te zien of de tijd in de app klopt met jouw klok
-st.write(f"🕒 App-tijd: {huidig_uur}:{huidige_minuut:02d} (Wacht op 12:56)")
+if st.button("🚀 Verstuur NU naar Google Sheets"):
+    params = {
+        "symo": int(st.session_state.p_symo_peak), 
+        "galvo": int(st.session_state.p_galvo_peak)
+    }
+    try:
+        # We voeren de aanroep direct uit naar jouw Script URL
+        r = requests.get(WEBAPP_URL, params=params, timeout=15)
+        if r.status_code == 200:
+            st.balloons()
+            st.success(f"✅ Succes! Check je Google Sheet. (Antwoord: {r.text})")
+        else:
+            st.error(f"Fout: Google geeft code {r.status_code} terug.")
+    except Exception as e:
+        st.error(f"Verbindingsfout: {e}")
 
-if huidig_uur == 12 and huidige_minuut == 56:
-    # Check of we vandaag al geschreven hebben
-    laatst_datum = ""
-    if os.path.exists(ARCHIVE_LOG):
-        with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
-    
-    if laatst_datum != vandaag:
-        params = {
-            "symo": int(st.session_state.p_symo_peak), 
-            "galvo": int(st.session_state.p_galvo_peak)
-        }
-        try:
-            # Verstuur de data
-            r = requests.get(WEBAPP_URL, params=params, timeout=15)
-            if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.balloons() # Feestje op het scherm als het lukt!
-                st.success("✅ Succes! Data is naar Google Sheets gestuurd.")
-            else:
-                st.error(f"Foutmelding van Google: {r.status_code}")
-        except Exception as e:
-            st.error(f"Er ging iets mis met de verbinding: {e}")
+st.divider()
+
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 
 

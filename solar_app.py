@@ -27,6 +27,25 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
+# --- WEER FUNCTIES (Tongeren-Borgloon) ---
+@st.cache_data(ttl=3600)
+def get_weather_forecast():
+    try:
+        # Locatie Tongeren: lat 50.78, lon 5.46
+        url = "https://open-meteo.com"
+        r = requests.get(url, timeout=5).json()
+        return r['daily']
+    except:
+        return None
+
+def vertaal_weer(code):
+    mapping = {
+        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
+        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
+        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
+    }
+    return mapping.get(code, ("Variabel", "🌡️"))
+
 def laad_dagpiek():
     vandaag = nu_lokaal.strftime('%Y-%m-%d')
     if os.path.exists(CACHE_FILE):
@@ -115,6 +134,20 @@ if nu_lokaal.hour == 23:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
+
+# --- WEERSVERWACHTING SECTIE ---
+forecast = get_weather_forecast()
+if forecast:
+    weer_status, weer_icoon = vertaal_weer(forecast['weather_code'][0])
+    temp_max = forecast['temperature_2m_max'][0]
+    straling = forecast['shortwave_radiation_sum'][0]
+    
+    st.info(f"**Vandaag in Tongeren:** {weer_icoon} {weer_status} | 🌡️ {temp_max}°C | ☀️ {straling} MJ/m²")
+    if straling > 20:
+        st.warning("🚀 **Potentieel Recordweer!** Hoge zonnestraling voorspeld.")
+else:
+    st.error("Weergegevens tijdelijk niet beschikbaar.")
+
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
 
@@ -139,6 +172,6 @@ if not table_df.empty:
 else:
     st.info("Tabel wordt geladen...")
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
 time.sleep(2)
 st.rerun()

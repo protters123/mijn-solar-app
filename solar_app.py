@@ -12,7 +12,7 @@ import pytz
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -27,9 +27,9 @@ nu_lokaal = datetime.now(tz)
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
-# --- NIEUW: WEER FUNCTIE (Cache voor 1 uur om API-limiet te voorkomen) ---
+# --- WEER FUNCTIE (Tongeren/Borgloon) ---
 @st.cache_data(ttl=3600)
-def get_weather_forecast(lat=50.78, lon=5.41): # Coördinaten Tongeren-Borgloon
+def get_weather_forecast(lat=50.78, lon=5.41):
     try:
         url = f"https://open-meteo.com{lat}&longitude={lon}&daily=temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin"
         r = requests.get(url, timeout=5).json()
@@ -69,7 +69,7 @@ def fetch_status(url):
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
 
-# --- DATA LADEN UIT SHEET ---
+# --- DATA LADEN ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -81,50 +81,28 @@ try:
             table_df = df
 except: pass
 
-# --- LIVE DATA OPHALEN ---
+# --- LIVE DATA & LOGICA ---
 val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken in geheugen
-update_cache = False
-if val_s > st.session_state.p_symo_peak:
-    st.session_state.p_symo_peak = val_s
-    update_cache = True
-if val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_galvo_peak = val_g
-    update_cache = True
-
-if update_cache:
+if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
+    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
+    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- RECORD CHECK & BALLONNEN ---
 current_all_time = max(historical_max, val_t)
-if val_t > historical_max and not st.session_state.record_celebrated:
-    st.balloons()
-    st.session_state.record_celebrated = True
-elif val_t <= historical_max:
-    st.session_state.record_celebrated = False
-
-# --- AUTO-LOGICA (ARCHIVEREN OM 23:00) ---
-vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
-    laatst_datum = ""
-    if os.path.exists(ARCHIVE_LOG):
-        try:
-            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
-        except: pass
-    if laatst_datum != vandaag:
-        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
-        try:
-            r = requests.get(WEBAPP_URL, params=params, timeout=15)
-            if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
-        except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
+
+# --- NIEUW: RECORD WAARSCHUWING LOGICA ---
+forecast = get_weather_forecast()
+if forecast:
+    max_straling = max(forecast['shortwave_radiation_sum'][0], forecast['shortwave_radiation_sum'][1])
+    if max_straling > 20: # Drempelwaarde voor zeer zonnige dag
+        st.success(f"🚀 **Potentieel Recordweer!** Er wordt {max_straling} MJ/m² straling verwacht. Hou de meters in de gaten!")
+
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
 st.metric("🏆 All-time Record", f"{current_all_time:,.0f} W")
 
@@ -142,13 +120,10 @@ with c2:
 
 st.divider()
 
-# --- NIEUW: WEERSVOORSPELLING SECTIE ---
+# --- WEERSVOORSPELLING ---
 st.subheader("🌤️ Weersverwachting (Regio Tongeren)")
-forecast = get_weather_forecast()
-
-if forecast and 'temperature_2m_max' in forecast:
+if forecast:
     wf1, wf2 = st.columns(2)
-    # Index 0 is vandaag, index 1 is morgen
     with wf1:
         st.info(f"**Vandaag**\n\n🌡️ {forecast['temperature_2m_max'][0]}°C\n\n☀️ {forecast['shortwave_radiation_sum'][0]} MJ/m²")
     with wf2:

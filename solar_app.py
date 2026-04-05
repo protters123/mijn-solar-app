@@ -153,6 +153,6 @@ if not table_df.empty:
 else:
     st.info("Tabel wordt geladen...")
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 23:00")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Auto-log om 8:33")
 time.sleep(2)
 st.rerun()

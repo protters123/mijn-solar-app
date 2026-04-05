@@ -15,7 +15,7 @@ SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 
 # PLAK HIER DE MIDDELSTE URL VAN JE SCHERM:
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyGEe_-BSVg5o0f_5oR9hHXs2h8Qvtl172ojC-edFyXgGHMOG4h7zkSkXIxdZlyI_lG/exec"
+WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"

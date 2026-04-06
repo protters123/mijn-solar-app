@@ -8,13 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - SCHONE VERSIE ☀️
+# SOLAR PIEK PRO - RESET VERSIE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# Vul hier je Google Script URL weer in (eindigend op /exec)
+# Vergeet niet je echte Google Script URL hier weer in te vullen!
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -39,7 +39,6 @@ def laad_dagpiek():
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    # Alleen laden als de datum in het bestand vandaag is
                     if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
@@ -48,6 +47,14 @@ def laad_dagpiek():
 def sla_dagpiek_op(s, g):
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag_iso},{s},{g}")
+
+# --- RESET LOGICA NAAR 299 ---
+# Deze blok dwingt de piek naar 299 en wist het oude geheugen
+if 'reset_done' not in st.session_state:
+    st.session_state.p_symo_peak = 299.0
+    st.session_state.p_galvo_peak = 0.0
+    sla_dagpiek_op(299.0, 0.0)
+    st.session_state.reset_done = True
 
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
@@ -89,7 +96,7 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
+                st.toast("🚀 Dagpiek gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---

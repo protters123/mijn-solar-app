@@ -53,11 +53,6 @@ if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
 
-# --- EENMALIGE CORRECTIE NAAR 1611 W ---
-if st.session_state.p_symo_peak < 1611:
-    st.session_state.p_symo_peak = 1611.0
-    sla_dagpiek_op(1611.0, st.session_state.p_galvo_peak)
-
 def fetch_status(url):
     try:
         r = requests.get(url, timeout=2).json()

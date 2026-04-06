@@ -8,14 +8,14 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - RESET VERSIE ☀️
+# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# Vergeet niet je echte Google Script URL hier weer in te vullen!
-WEBAPP_URL = "https://google.com" 
+# Jouw werkende Google Script URL
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -39,6 +39,7 @@ def laad_dagpiek():
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
+                    # Alleen waarden laden als de datum in het bestand vandaag is
                     if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
@@ -47,14 +48,6 @@ def laad_dagpiek():
 def sla_dagpiek_op(s, g):
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag_iso},{s},{g}")
-
-# --- RESET LOGICA NAAR 299 ---
-# Deze blok dwingt de piek naar 299 en wist het oude geheugen
-if 'reset_done' not in st.session_state:
-    st.session_state.p_symo_peak = 299.0
-    st.session_state.p_galvo_peak = 0.0
-    sla_dagpiek_op(299.0, 0.0)
-    st.session_state.reset_done = True
 
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
@@ -72,7 +65,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken
+# Update Dagpieken (automatische reset bij nieuwe datum via laad_dagpiek)
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)

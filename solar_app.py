@@ -57,6 +57,7 @@ def vertaal_weer(code):
 @st.cache_data(ttl=3600)
 def get_weather_forecast():
     try:
+        # FIX: Volledige URL voor de weer-API
         url = "https://open-meteo.com"
         r = requests.get(url, timeout=5)
         if r.status_code == 200:

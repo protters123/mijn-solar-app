@@ -111,7 +111,7 @@ st.title("☀️ Solar Piek")
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 # Geanimeerd bliksemteken voor Totaal Live
-st.markdown(f"### 📊 Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
+st.markdown(f"### Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0

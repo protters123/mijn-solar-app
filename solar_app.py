@@ -156,7 +156,7 @@ with c1:
     st.metric("Nu", f"{val_s:,.0f} W")
     st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
 with c2:
-    st.markdown("### 📊 Totaal")
+    st.markdown("### ⚡ Totaal")
     # Piek totaal is de som van de twee individuele pieken van vandaag
     totaal_piek_vandaag = st.session_state.p_symo_peak + st.session_state.p_galvo_peak
     st.metric("Piek Vandaag", f"{totaal_piek_vandaag:,.0f} W")

@@ -8,13 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - GALVO RESET VERSIE ☀️
+# SOLAR PIEK PRO - PIEK TOTAAL VERSIE ⚡☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# FIX: Je Google Script URL weer hersteld
+# FIX: Je echte Google Script URL weer hersteld
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -45,6 +45,25 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
+# --- WEER INTERPRETATIE ---
+def vertaal_weer(code):
+    mapping = {
+        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
+        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
+        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
+    }
+    return mapping.get(code, ("Variabel", "🌡️"))
+
+@st.cache_data(ttl=3600)
+def get_weather_forecast():
+    try:
+        url = "https://api.open-meteo.com/v1/forecast?latitude=50.7805&longitude=5.4648&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin&forecast_days=1"
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            return r.json()["daily"]
+        return None
+    except: return None
+
 def laad_dagpiek():
     if os.path.exists(CACHE_FILE):
         try:
@@ -65,14 +84,6 @@ def sla_dagpiek_op(s, g):
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
-
-# --- HANDMATIGE RESET KNOP (Bovenaan menu) ---
-if st.sidebar.button("♻️ Reset Galvo Piek naar 0"):
-    st.session_state.p_galvo_peak = 0.0
-    sla_dagpiek_op(st.session_state.p_symo_peak, 0.0)
-    st.sidebar.success("Galvo Piek gereset!")
-    time.sleep(1)
-    st.rerun()
 
 def fetch_status(url):
     try:
@@ -146,6 +157,7 @@ with c1:
     st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
 with c2:
     st.markdown("### ⚡ Totaal")
+    # Piek totaal is de som van de twee individuele pieken van vandaag
     totaal_piek_vandaag = st.session_state.p_symo_peak + st.session_state.p_galvo_peak
     st.metric("Piek Vandaag", f"{totaal_piek_vandaag:,.0f} W")
 with c3:

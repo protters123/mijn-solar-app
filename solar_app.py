@@ -122,7 +122,7 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
         except: pass
 
 # --- UI DASHBOARD ---
-st.title("☀️ Solar Piek Pro") 
+st.title("☀️ Solar Piek") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 forecast = get_weather_forecast()
@@ -133,7 +133,7 @@ if forecast:
     st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 
 # Geanimeerd bliksemteken voor Totaal Live
-st.markdown(f"### 📊 Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
+st.markdown(f"### Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0

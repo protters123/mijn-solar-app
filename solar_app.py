@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️
+# SOLAR PIEK PRO - ANIMATIE VERSIE ⚡
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -22,6 +22,21 @@ URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
+
+# --- CSS VOOR ANIMATIE ---
+st.markdown("""
+    <style>
+    @keyframes blinker {
+        50% { opacity: 0; }
+    }
+    .stroom-teken {
+        animation: blinker 1.5s linear infinite;
+        color: #FFD700;
+        font-size: 1.5rem;
+        margin-right: 5px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')
@@ -39,7 +54,6 @@ def laad_dagpiek():
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    # Alleen waarden laden als de datum in het bestand vandaag is
                     if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
@@ -65,7 +79,7 @@ val_s, icon_s = fetch_status(URL_1)
 val_g, icon_g = fetch_status(URL_2)
 val_t = val_s + val_g
 
-# Update Dagpieken (automatische reset bij nieuwe datum via laad_dagpiek)
+# Update Dagpieken
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
@@ -96,7 +110,8 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 st.title("☀️ Solar Piek") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
-st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
+# Geanimeerd bliksemteken voor Totaal Live
+st.markdown(f"### 📊 Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0

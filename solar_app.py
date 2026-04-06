@@ -93,7 +93,7 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
         except: pass
 
 # --- UI DASHBOARD ---
-st.title("☀️ Solar Piek Pro") 
+st.title("☀️ Solar Piek") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")

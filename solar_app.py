@@ -130,10 +130,6 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 st.title("☀️ Solar Piek") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
-# --- UI DASHBOARD ---
-st.title("☀️ Solar Piek") 
-st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
-
 # Weerbericht ophalen en verwerken
 forecast = get_weather_forecast()
 if forecast:

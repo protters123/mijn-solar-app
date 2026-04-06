@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - ANIMATIE VERSIE ⚡
+# SOLAR PIEK PRO - VOLLEDIGE VERSIE ⚡🌦️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -46,6 +46,26 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
+
+# --- WEER INTERPRETATIE ---
+def vertaal_weer(code):
+    mapping = {
+        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
+        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
+        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
+    }
+    return mapping.get(code, ("Variabel", "🌡️"))
+
+@st.cache_data(ttl=3600)
+def get_weather_forecast():
+    try:
+        url = "https://open-meteo.com"
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            return r.json()["daily"]
+        return None
+    except:
+        return None
 
 def laad_dagpiek():
     if os.path.exists(CACHE_FILE):
@@ -109,6 +129,14 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
+
+# Weerbericht
+forecast = get_weather_forecast()
+if forecast:
+    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
+    t_max = forecast['temperature_2m_max'][0]
+    z_straling = forecast['shortwave_radiation_sum'][0]
+    st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 
 # Geanimeerd bliksemteken voor Totaal Live
 st.markdown(f"### 📊 Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)

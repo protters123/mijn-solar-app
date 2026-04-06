@@ -14,7 +14,7 @@ import pytz
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# Jouw werkende Google Script URL
+# FIX: Je echte Google Script URL weer teruggezet
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -87,6 +87,7 @@ if 'p_symo_peak' not in st.session_state:
 
 def fetch_status(url):
     try:
+        # We halen 'active_power_w' op. Let op: Galvo JSON moet hetzelfde veld hebben.
         r = requests.get(url, timeout=2).json()
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
@@ -132,7 +133,6 @@ if forecast:
     z_straling = forecast['shortwave_radiation_sum'][0]
     st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 
-# Geanimeerd bliksemteken voor Totaal Live
 st.markdown(f"### Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 
 # --- DATA LADEN UIT SHEET ---

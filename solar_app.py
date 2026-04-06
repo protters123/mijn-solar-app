@@ -8,13 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️
+# SOLAR PIEK PRO - SCHONE VERSIE ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# Je Google Script URL (eindigend op /exec)
+# Vul hier je Google Script URL weer in (eindigend op /exec)
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -39,6 +39,7 @@ def laad_dagpiek():
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
+                    # Alleen laden als de datum in het bestand vandaag is
                     if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
@@ -52,10 +53,6 @@ def sla_dagpiek_op(s, g):
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
-     # --- EENMALIGE CORRECTIE NAAR 100 W ---
-if st.session_state.p_symo_peak < 100:
-    st.session_state.p_symo_peak = 100.0
-    sla_dagpiek_op(100.0, st.session_state.p_galvo_peak)
 
 def fetch_status(url):
     try:
@@ -97,7 +94,6 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
-# HIER STAAT DE TIJD EN DATUM WEER
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")

@@ -8,13 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - GEANIMEERDE VERSIE ⚡☀️
+# SOLAR PIEK PRO - PIEK TOTAAL VERSIE ⚡☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# FIX: Je echte Google Script URL weer teruggezet
+# FIX: Je echte Google Script URL weer hersteld
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -87,7 +87,6 @@ if 'p_symo_peak' not in st.session_state:
 
 def fetch_status(url):
     try:
-        # We halen 'active_power_w' op. Let op: Galvo JSON moet hetzelfde veld hebben.
         r = requests.get(url, timeout=2).json()
         return abs(float(r['active_power_w'])), "🟢"
     except: return 0.0, "🔴"
@@ -150,15 +149,21 @@ except: pass
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
-c1, c2 = st.columns(2)
+# Drie kolommen: Symo | Totaal Piek | Galvo
+c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
-    st.metric("Piek Vandaag", f"{st.session_state.p_symo_peak:,.0f} W")
+    st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
 with c2:
+    st.markdown("### 📊 Totaal")
+    # Piek totaal is de som van de twee individuele pieken van vandaag
+    totaal_piek_vandaag = st.session_state.p_symo_peak + st.session_state.p_galvo_peak
+    st.metric("Piek Vandaag", f"{totaal_piek_vandaag:,.0f} W")
+with c3:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
+    st.metric("Piek", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
 st.subheader("💚 Maandoverzicht") 

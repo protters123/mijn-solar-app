@@ -8,12 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️
+# SOLAR PIEK PRO - GEANIMEERDE VERSIE ⚡☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-# Pas deze WEBAPP_URL aan naar de URL van je Google Apps Script
+
+# Jouw werkende Google Script URL
 WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -22,9 +23,25 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
 
+# --- CSS VOOR ANIMATIE ---
+st.markdown("""
+    <style>
+    @keyframes blinker { 50% { opacity: 0; } }
+    .stroom-teken {
+        animation: blinker 1.5s linear infinite;
+        color: #FFD700;
+        font-size: 1.5rem;
+        margin-right: 5px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- TIJDZONE & GEHEUGEN ---
 tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
+vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
+vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
+
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
 
@@ -45,26 +62,23 @@ def get_weather_forecast():
         if r.status_code == 200:
             return r.json()["daily"]
         return None
-    except:
-        return None
+    except: return None
 
 def laad_dagpiek():
-    vandaag = nu_lokaal.strftime('%Y-%m-%d')
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
                 content = f.read().strip()
                 if content:
                     parts = content.split(",")
-                    if parts[0] == vandaag:
+                    if parts[0] == vandaag_iso:
                         return float(parts[1]), float(parts[2])
         except: pass
     return 0.0, 0.0
 
 def sla_dagpiek_op(s, g):
-    vandaag = nu_lokaal.strftime('%Y-%m-%d')
     with open(CACHE_FILE, "w") as f:
-        f.write(f"{vandaag},{s},{g}")
+        f.write(f"{vandaag_iso},{s},{g}")
 
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
@@ -88,29 +102,28 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN OM 23:00 ---
-vandaag = nu_lokaal.strftime('%Y-%m-%d')
-if nu_lokaal.hour == 23:
+# --- AUTO-ARCHIVEREN OM 20:30 ---
+target_uur = 20
+target_min = 30
+if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
-    
-    if laatst_datum != vandaag:
-        params = {
-            "symo": int(st.session_state.p_symo_peak), 
-            "galvo": int(st.session_state.p_galvo_peak)
-        }
+    if laatst_datum != vandaag_iso:
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
-                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag)
-                st.toast("🚀 Dagpiek automatisch gearchiveerd!")
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
+                st.balloons()
+                st.toast("🚀 Dagpiek gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek Pro") 
+st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 forecast = get_weather_forecast()
 if forecast:
@@ -119,7 +132,8 @@ if forecast:
     z_straling = forecast['shortwave_radiation_sum'][0]
     st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
 
-st.subheader(f"📊 Totaal Live: {val_t:,.0f} W")
+# Geanimeerd bliksemteken voor Totaal Live
+st.markdown(f"### 📊 Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
@@ -144,10 +158,9 @@ with c1:
 with c2:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
-    st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W") 
+    st.metric("Piek Vandaag", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
-
 st.subheader("💚 Maandoverzicht") 
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))

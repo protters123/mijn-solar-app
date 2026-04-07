@@ -8,14 +8,14 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - PIEK TOTAAL VERSIE ⚡☀️
+# SOLAR PIEK PRO - FIX ARCHIVERING ☀️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# FIX: Je echte Google Script URL weer hersteld
-WEBAPP_URL = "https://google.com" 
+# FIX: Je unieke Google Script URL weer hersteld (belangrijk!)
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -44,25 +44,6 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 CACHE_FILE = "dagpiek_geheugen.txt"
 ARCHIVE_LOG = "laatst_gearchiveerd.txt"
-
-# --- WEER INTERPRETATIE ---
-def vertaal_weer(code):
-    mapping = {
-        0: ("Onbewolkt", "☀️"), 1: ("Licht bewolkt", "🌤️"), 2: ("Half bewolkt", "⛅"), 
-        3: ("Bewolkt", "☁️"), 45: ("Mistig", "🌫️"), 51: ("Lichte regen", "🌧️"),
-        61: ("Regen", "🌧️"), 80: ("Regenbuien", "🌧️"), 95: ("Onweer", "⛈️")
-    }
-    return mapping.get(code, ("Variabel", "🌡️"))
-
-@st.cache_data(ttl=3600)
-def get_weather_forecast():
-    try:
-        url = "https://api.open-meteo.com/v1/forecast?latitude=50.7805&longitude=5.4648&daily=weather_code,temperature_2m_max,shortwave_radiation_sum&timezone=Europe%2FBerlin&forecast_days=1"
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200:
-            return r.json()["daily"]
-        return None
-    except: return None
 
 def laad_dagpiek():
     if os.path.exists(CACHE_FILE):
@@ -102,9 +83,10 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN OM 20:30 ---
-target_uur = 20
-target_min = 30
+# --- AUTO-ARCHIVEREN (TEST: 16:42 | NORMAAL: 20:30) ---
+target_uur = 16
+target_min = 42
+
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
@@ -118,23 +100,16 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Dagpiek gearchiveerd!")
+                st.toast("🚀 Dagpiek succesvol gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
-forecast = get_weather_forecast()
-if forecast:
-    w_tekst, w_icoon = vertaal_weer(forecast['weather_code'][0])
-    t_max = forecast['temperature_2m_max'][0]
-    z_straling = forecast['shortwave_radiation_sum'][0]
-    st.info(f"**Weerbericht Tongeren:** {w_icoon} {w_tekst} | 🌡️ {t_max}°C | ☀️ {z_straling} MJ/m²")
-
 st.markdown(f"### Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 
-# --- DATA LADEN UIT SHEET ---
+# DATA LADEN UIT SHEET
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -149,7 +124,6 @@ except: pass
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
-# Drie kolommen: Symo | Totaal Piek | Galvo
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(f"### {icon_s} Symo")
@@ -157,7 +131,6 @@ with c1:
     st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
 with c2:
     st.markdown("### ⚡ Totaal")
-    # Piek totaal is de som van de twee individuele pieken van vandaag
     totaal_piek_vandaag = st.session_state.p_symo_peak + st.session_state.p_galvo_peak
     st.metric("Piek Vandaag", f"{totaal_piek_vandaag:,.0f} W")
 with c3:
@@ -170,6 +143,6 @@ st.subheader("💚 Maandoverzicht")
 if not table_df.empty:
     st.table(table_df.iloc[::-1].head(15))
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')} | Locatie: Tongeren-Borgloon")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)
 st.rerun()

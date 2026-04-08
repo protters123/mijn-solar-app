@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - JAAROVERZICHT VERSIE ☀️⚡
+# SOLAR PIEK PRO - JAAR + GRAFIEK VERSIE ☀️📈
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -107,7 +107,7 @@ st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 st.markdown(f"### Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 
-# DATA LADEN UIT SHEET
+# --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -115,7 +115,9 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
-            historical_max = pd.to_numeric(df.iloc[:, 3], errors='coerce').max()
+            # Kolommen netjes benoemen
+            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
+            historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
             table_df = df
 except: pass
 
@@ -138,12 +140,18 @@ with c3:
 
 st.divider()
 
-# --- JAAROVERZICHT ---
-st.subheader("📅 Jaaroverzicht") 
+# --- GRAFIEK ---
 if not table_df.empty:
-    # head(15) is verwijderd, iloc[::-1] zorgt dat de nieuwste datum bovenaan staat
-    # st.dataframe maakt de tabel interactief en scrollbaar
-    st.dataframe(table_df.iloc[::-1], use_container_width=True, height=400)
+    st.subheader("📈 Piekverloop (Jaar)")
+    # We bereiden data voor de grafiek voor
+    chart_data = table_df.copy()
+    chart_data['Datum'] = pd.to_datetime(chart_data['Datum'], dayfirst=True)
+    st.line_chart(chart_data.set_index('Datum')[['Symo', 'Galvo', 'Totaal']])
+
+# --- JAAROVERZICHT TABEL ---
+st.subheader("📅 Jaaroverzicht (Tabel)") 
+if not table_df.empty:
+    st.dataframe(table_df.iloc[::-1], use_container_width=True, height=300)
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)

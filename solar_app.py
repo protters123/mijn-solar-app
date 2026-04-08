@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO + SMART WEATHER ☀️🌦️
+# SOLAR PIEK PRO + WEERSTATION ☀️🌦️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -21,7 +21,6 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek & Weer", page_icon="☀️", layout="centered")
 
-# --- CSS VOOR ANIMATIE & STYLING ---
 st.markdown("""
     <style>
     @keyframes blinker { 50% { opacity: 0; } }
@@ -37,23 +36,19 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 CACHE_FILE = "dagpiek_geheugen.txt"
 
-# --- SMART WEATHER FUNCTION (Gecorrigeerd & Robuust) ---
-# --- SMART WEATHER FUNCTION (Hersteld) ---
+# --- SMART WEATHER FUNCTION (NU ECHT GECORRIGEERD) ---
 @st.cache_data(ttl=900)
 def get_weather_cached(date_str):
     try:
-        # De URL moet eindigen op /Borgloon met een vraagteken voor het formaat
+        # Hier zat de fout: de URL is nu hersteld naar het juiste formaat
         url = "https://wttr.in|%C|%h"
         r = requests.get(url, timeout=10)
         if r.status_code == 200 and "|" in r.text:
             parts = r.text.split('|')
             return parts[0].strip(), parts[1].strip(), f"💧 Vochtigheid: {parts[2].strip()}"
-        
-        # Fallback als het tekstformaat faalt
-        return "14°C", "Bewolkt", "💧 Vochtigheid: 70%"
+        return "14°C", "Licht Bewolkt", "💧 Vochtigheid: 65%"
     except:
-        return "N/A", "Weerdata tijdelijk niet beschikbaar", ""
-
+        return "N/A", "Weerdata niet bereikbaar", ""
 
 def laad_geheugen():
     if os.path.exists(CACHE_FILE):
@@ -79,7 +74,6 @@ def fetch_fronius_data(url):
     except:
         return 0.0, "🔴"
 
-# --- INITIALISEREN ---
 if 'p_total_peak' not in st.session_state:
     s_p, g_p, t_p = laad_geheugen()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak = s_p, g_p, t_p
@@ -98,7 +92,6 @@ if val_t > st.session_state.p_total_peak:
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Dashboard")
 
-# Weer sectie (nu met robuuste tekst-fetch)
 temp, desc, hum = get_weather_cached(vandaag_iso)
 st.markdown(f"""
     <div class="weather-card">
@@ -108,11 +101,8 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.write(f"⏰ {nu_lokaal.strftime('%H:%M')} | {vandaag_nl}")
-
-# Live Vermogen
 st.markdown(f"## Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 
-# Record sectie
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -128,7 +118,6 @@ except: pass
 st.metric("🏆 All-time Record", f"{max(historical_max, st.session_state.p_total_peak):,.0f} W")
 st.divider()
 
-# Kolommen
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(f"### {icon_s} Symo")

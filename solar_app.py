@@ -36,25 +36,19 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 CACHE_FILE = "hoogste_piek.txt"
 
-# --- SMART WEATHER FUNCTION (NU ECHT GECORRIGEERD) ---
+# --- SMART WEATHER FUNCTION ---
 @st.cache_data(ttl=900)
 def get_weather_cached(date_str):
     try:
-        # &lang=nl dwingt Nederlands af, ook op je gsm
         url = "https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl"
         r = requests.get(url, timeout=10)
-        
-        # Dit lost de vreemde tekens (zoals Â°) op
         r.encoding = 'utf-8' 
-        
         if r.status_code == 200 and "|" in r.text:
             parts = r.text.split('|')
             return parts[0].strip(), parts[1].strip(), f"💧 Vochtigheid: {parts[2].strip()}"
-            
         return "14°C", "Licht Bewolkt", "💧 Vochtigheid: 65%"
-    except Exception as e:
-        return "N/A", f"Fout: {str(e)}", ""
-
+    except Exception:
+        return "N/A", "Weerdata niet bereikbaar", ""
 
 def laad_geheugen():
     if os.path.exists(CACHE_FILE):
@@ -72,6 +66,13 @@ def sla_geheugen_op(s, g, t):
             f.write(f"{vandaag_iso},{s},{g},{t}")
     except: pass
 
+def sla_naar_sheets(s, g, t):
+    try:
+        # Stuurt de nieuwe piek direct naar je Google Apps Script
+        payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t}
+        requests.post(WEBAPP_URL, json=payload, timeout=5)
+    except: pass
+
 def fetch_fronius_data(url):
     try:
         r = requests.get(url, timeout=2).json()
@@ -80,20 +81,25 @@ def fetch_fronius_data(url):
     except:
         return 0.0, "🔴"
 
+# --- INITIALISATIE ---
 if 'p_total_peak' not in st.session_state:
     s_p, g_p, t_p = laad_geheugen()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak = s_p, g_p, t_p
 
-# --- LIVE DATA ---
+# --- LIVE DATA VERWERKING ---
 val_s, icon_s = fetch_fronius_data(URL_1)
 val_g, icon_g = fetch_fronius_data(URL_2)
 val_t = val_s + val_g
 
+# Update piek als de huidige opbrengst hoger is
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
+    
+    # Sla op in lokaal bestand én Google Sheets
     sla_geheugen_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak)
+    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak)
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Dashboard")

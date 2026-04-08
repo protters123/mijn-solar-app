@@ -8,13 +8,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - FIX ARCHIVERING ☀️
+# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️⚡
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# FIX: Je unieke Google Script URL weer hersteld (belangrijk!)
+# De unieke Google Script URL voor de archivering
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -83,7 +83,7 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN (TEST: 16:42 | NORMAAL: 20:30) ---
+# --- AUTO-ARCHIVEREN OM 20:30 ---
 target_uur = 20
 target_min = 30
 

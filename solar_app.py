@@ -85,6 +85,23 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
+# --- AUTO-ARCHIVEREN OM 20:30 ---
+if nu_lokaal.hour == 20 and nu_lokaal.minute == 30:
+    laatst_datum = ""
+    if os.path.exists(ARCHIVE_LOG):
+        try:
+            with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
+        except: pass
+    if laatst_datum != vandaag_iso:
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
+        try:
+            r = requests.get(WEBAPP_URL, params=params, timeout=15)
+            if r.status_code == 200:
+                with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
+                st.balloons()
+                st.toast("🚀 Dagpiek succesvol gearchiveerd!")
+        except: pass
+
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
@@ -96,11 +113,11 @@ with col_a:
 with col_b:
     st.markdown(f"### 🍯 Oogst Vandaag: {kwh_t:,.2f} kWh")
 
-# --- NIEUWE TABEL OOGST DETAILS ---
+# --- TABEL: OOGST DETAILS VANDAAG ---
 st.subheader("📊 Oogst Details (Vandaag)")
 oogst_data = {
     "Inverter": [f"{icon_s} Symo", f"{icon_g} Galvo", "✨ Totaal"],
-    "Nu (W)": [f"{val_s:,.0f}", f"{val_g:,.0f}", f"{val_t:,.0f}"],
+    "Live (W)": [f"{val_s:,.0f}", f"{val_g:,.0f}", f"{val_t:,.0f}"],
     "Piek (W)": [f"{st.session_state.p_symo_peak:,.0f}", f"{st.session_state.p_galvo_peak:,.0f}", f"{st.session_state.p_symo_peak + st.session_state.p_galvo_peak:,.0f}"],
     "Oogst (kWh)": [f"{kwh_s:.2f}", f"{kwh_g:.2f}", f"{kwh_t:.2f}"]
 }
@@ -122,7 +139,7 @@ except: pass
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
-# Bestaande metrics
+# De metrics in kolommen
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(f"### {icon_s} Symo")
@@ -146,7 +163,7 @@ if not table_df.empty:
     chart_data['Datum'] = pd.to_datetime(chart_data['Datum'], dayfirst=True)
     st.line_chart(chart_data.set_index('Datum')[['Symo', 'Galvo', 'Totaal']])
 
-st.subheader("📅 Jaaroverzicht (Tabel)") 
+st.subheader("📅 Jaaroverzicht (Tabel uit Sheet)") 
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=300)
 

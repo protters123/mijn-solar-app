@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - VERSIE MET KWH OOGST ☀️📈
+# SOLAR PIEK PRO - VERSIE MET OOGST TABEL ☀️📈
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -115,6 +115,16 @@ with col_a:
 with col_b:
     st.markdown(f"### 🍯 Oogst Vandaag: {kwh_t:,.2f} kWh")
 
+# --- NIEUWE TABEL: OOGST DETAILS ---
+st.subheader("📊 Oogst Details (Vandaag)")
+oogst_data = {
+    "Inverter": [f"{icon_s} Symo", f"{icon_g} Galvo", "✨ Totaal"],
+    "Nu (W)": [f"{val_s:,.0f}", f"{val_g:,.0f}", f"{val_t:,.0f}"],
+    "Piek (W)": [f"{st.session_state.p_symo_peak:,.0f}", f"{st.session_state.p_galvo_peak:,.0f}", f"{st.session_state.p_symo_peak + st.session_state.p_galvo_peak:,.0f}"],
+    "Oogst (kWh)": [f"{kwh_s:.2f}", f"{kwh_g:.2f}", f"{kwh_t:.2f}"]
+}
+st.table(pd.DataFrame(oogst_data))
+
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
@@ -136,17 +146,14 @@ with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
     st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
-    st.caption(f"Vandaag: {kwh_s:,.2f} kWh")
 with c2:
     st.markdown("### 📊 Totaal")
     totaal_piek_vandaag = st.session_state.p_symo_peak + st.session_state.p_galvo_peak
     st.metric("Piek Vandaag", f"{totaal_piek_vandaag:,.0f} W")
-    st.caption(f"Totaal: {kwh_t:,.2f} kWh")
 with c3:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek", f"{st.session_state.p_galvo_peak:,.0f} W")
-    st.caption(f"Vandaag: {kwh_g:,.2f} kWh")
 
 st.divider()
 

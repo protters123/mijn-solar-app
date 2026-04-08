@@ -21,6 +21,7 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek & Weer", page_icon="☀️", layout="centered")
 
+# --- CSS VOOR ANIMATIE & STYLING ---
 st.markdown("""
     <style>
     @keyframes blinker { 50% { opacity: 0; } }
@@ -36,20 +37,23 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 CACHE_FILE = "dagpiek_geheugen.txt"
 
-# --- SMART WEATHER FUNCTION (Cache 15 min) ---
+# --- SMART WEATHER FUNCTION (Gecorrigeerd & Robuust) ---
 @st.cache_data(ttl=900)
 def get_weather_cached(date_str):
     try:
-        # We halen specifiek de data voor Borgloon op in JSON formaat
-        r = requests.get("https://wttr.in", timeout=5).json()
-        current = r['current_condition'][0]
-        temp = current['temp_C']
-        # Pak Nederlandse beschrijving indien beschikbaar
-        desc = current['lang_nl'][0]['value'] if 'lang_nl' in current else current['weatherDesc'][0]['value']
-        cloud = current['cloudcover']
-        return f"{temp}°C", desc.capitalize(), f"☁️ Bewolking: {cloud}%"
-    except Exception as e:
-        return "N/A", "Weerdienst tijdelijk offline", ""
+        # Gebruik tekstformaat ipv JSON voor maximale stabiliteit
+        # %t=temp, %C=beschrijving, %h=vochtigheid
+        url = "https://wttr.in|%C|%h"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200 and "|" in r.text:
+            parts = r.text.split('|')
+            temp = parts[0].strip()
+            desc = parts[1].strip()
+            hum = parts[2].strip()
+            return temp, desc, f"💧 Vochtigheid: {hum}"
+        return "N/A", "Dienst reageert traag", ""
+    except:
+        return "N/A", "Weerdata tijdelijk niet beschikbaar", ""
 
 def laad_geheugen():
     if os.path.exists(CACHE_FILE):
@@ -94,12 +98,12 @@ if val_t > st.session_state.p_total_peak:
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Dashboard")
 
-# Weer sectie met de nieuwe cache functie
-temp, desc, cloud = get_weather_cached(vandaag_iso)
+# Weer sectie (nu met robuuste tekst-fetch)
+temp, desc, hum = get_weather_cached(vandaag_iso)
 st.markdown(f"""
     <div class="weather-card">
         <h4 style='margin:0;'>Lokaal Weer (Borgloon)</h4>
-        <span style='font-size: 1.2rem;'><b>{temp}</b> | {desc} | {cloud}</span>
+        <span style='font-size: 1.2rem;'><b>{temp}</b> | {desc} | {hum}</span>
     </div>
 """, unsafe_allow_html=True)
 

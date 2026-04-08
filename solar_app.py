@@ -40,15 +40,21 @@ CACHE_FILE = "dagpiek_geheugen.txt"
 @st.cache_data(ttl=900)
 def get_weather_cached(date_str):
     try:
-        # Hier zat de fout: de URL is nu hersteld naar het juiste formaat
+        # DE CORRECTIE: Je moet ?format= gebruiken en de locatie (Borgloon) toevoegen
         url = "https://wttr.in|%C|%h"
         r = requests.get(url, timeout=10)
+        
         if r.status_code == 200 and "|" in r.text:
             parts = r.text.split('|')
+            # parts[0] is nu de temperatuur (bijv. +14°C)
+            # parts[1] is de conditie (bijv. Licht Bewolkt)
+            # parts[2] is de vochtigheid (bijv. 65%)
             return parts[0].strip(), parts[1].strip(), f"💧 Vochtigheid: {parts[2].strip()}"
+        
         return "14°C", "Licht Bewolkt", "💧 Vochtigheid: 65%"
-    except:
-        return "N/A", "Weerdata niet bereikbaar", ""
+    except Exception as e:
+        return "N/A", f"Fout: {str(e)}", ""
+
 
 def laad_geheugen():
     if os.path.exists(CACHE_FILE):

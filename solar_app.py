@@ -40,9 +40,12 @@ CACHE_FILE = "dagpiek_geheugen.txt"
 @st.cache_data(ttl=900)
 def get_weather_cached(date_str):
     try:
-        # Alles onder 'try' moet exact op dezelfde hoogte beginnen
-        url = "https://wttr.in/Borgloon?format=%t|%C|%h&m"
+        # &lang=nl dwingt Nederlands af, ook op je gsm
+        url = "https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl"
         r = requests.get(url, timeout=10)
+        
+        # Dit lost de vreemde tekens (zoals Â°) op
+        r.encoding = 'utf-8' 
         
         if r.status_code == 200 and "|" in r.text:
             parts = r.text.split('|')
@@ -51,6 +54,7 @@ def get_weather_cached(date_str):
         return "14°C", "Licht Bewolkt", "💧 Vochtigheid: 65%"
     except Exception as e:
         return "N/A", f"Fout: {str(e)}", ""
+
 
 def laad_geheugen():
     if os.path.exists(CACHE_FILE):

@@ -41,7 +41,8 @@ CACHE_FILE = "dagpiek_geheugen.txt"
 def get_weather_cached(date_str):
     try:
         # DE CORRECTIE: Je moet ?format= gebruiken en de locatie (Borgloon) toevoegen
-        url = "https://wttr.in|%C|%h"
+        url = "https://wttr.in/Borgloon?format=%t|%c|%h"
+
         r = requests.get(url, timeout=10)
         
         if r.status_code == 200 and "|" in r.text:

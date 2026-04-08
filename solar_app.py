@@ -42,9 +42,7 @@ def get_weather_cached(date_str):
     try:
         # DE CORRECTIE: Je moet ?format= gebruiken en de locatie (Borgloon) toevoegen
        url = "https://wttr.in/Borgloon?format=%t|%C|%h|m"
-
-
-        r = requests.get(url, timeout=10)
+          r = requests.get(url, timeout=10)
         
         if r.status_code == 200 and "|" in r.text:
             parts = r.text.split('|')

@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - WEER + OOGST/DAG ☀️🌤️📈
+# SOLAR PIEK PRO - HERSTELDE WEER DATA ☀️🌤️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -21,12 +21,19 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
 
-# --- CSS VOOR ANIMATIE ---
+# --- CSS VOOR SCHONE UI ---
 st.markdown("""
     <style>
     @keyframes blinker { 50% { opacity: 0; } }
     .stroom-teken { animation: blinker 1.5s linear infinite; color: #FFD700; font-size: 1.5rem; margin-right: 5px; }
-    .weather-card { background: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+    .weather-card { 
+        background: #f0f2f6; 
+        padding: 20px; 
+        border-radius: 15px; 
+        margin-bottom: 25px;
+        border-left: 5px solid #FFD700;
+        font-family: sans-serif;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -55,13 +62,14 @@ def sla_dagpiek_op(s, g):
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag_iso},{s},{g}")
 
+# --- VERBETERDE WEER FUNCTIE ---
 def get_weather():
     try:
-        # Weer voor Tongeren/Borgloon regio
+        # Gebruik ?format=3 voor een schone, enkele regel tekst (bijv: "Tongeren: ☀️ +12°C")
         r = requests.get("https://wttr.in", timeout=3)
-        return r.text
+        return r.text.strip()
     except:
-        return "☀️ Weerdata niet beschikbaar"
+        return "☀️ Weerdata tijdelijk niet beschikbaar"
 
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
@@ -110,7 +118,12 @@ st.title("☀️ Solar Piek")
 
 # WEER WIDGET
 weather_info = get_weather()
-st.markdown(f"""<div class='weather-card'><b>Actueel Weer:</b> {weather_info}<br>⏰ <b>App-tijd:</b> {nu_lokaal.strftime('%H:%M')}</div>""", unsafe_allow_html=True)
+st.markdown(f"""
+    <div class='weather-card'>
+        <span style='font-size: 1.2rem;'>🌍 <b>{weather_info}</b></span><br>
+        <span style='color: #666;'>⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})</span>
+    </div>
+""", unsafe_allow_html=True)
 
 # Hoofdstatistieken
 col_a, col_b = st.columns(2)

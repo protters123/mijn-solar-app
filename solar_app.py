@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - NU MET OOGST/DAG OPSLAG ☀️📈
+# SOLAR PIEK PRO - VOLLEDIGE OOGST/DAG VERSIE
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -93,18 +93,16 @@ if nu_lokaal.hour == 23 and nu_lokaal.minute == 0:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     if laatst_datum != vandaag_iso:
-        # Stuurt nu ook 'kwh' mee voor je nieuwe kolom
         params = {
             "symo": int(st.session_state.p_symo_peak), 
             "galvo": int(st.session_state.p_galvo_peak),
-            "kwh": round(kwh_t, 2)
+            "kwh": round(kwh_t, 2) # De 'Oogst/dag' waarde
         }
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Daggegevens succesvol gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
@@ -118,16 +116,6 @@ with col_a:
 with col_b:
     st.markdown(f"### 🍯 Oogst Vandaag: {kwh_t:,.2f} kWh")
 
-# --- TABEL: LIVE DETAILS ---
-st.subheader("📊 Details per Omvormer")
-oogst_data = {
-    "Inverter": [f"{icon_s} Symo", f"{icon_g} Galvo", "✨ Totaal"],
-    "Live (W)": [f"{val_s:,.0f}", f"{val_g:,.0f}", f"{val_t:,.0f}"],
-    "Piek (W)": [f"{st.session_state.p_symo_peak:,.0f}", f"{st.session_state.p_galvo_peak:,.0f}", f"{st.session_state.p_symo_peak + st.session_state.p_galvo_peak:,.0f}"],
-    "Oogst (kWh)": [f"{kwh_s:.2f}", f"{kwh_g:.2f}", f"{kwh_t:.2f}"]
-}
-st.table(pd.DataFrame(oogst_data))
-
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
@@ -136,8 +124,15 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
-            # Kolommen instellen (Let op: moet matchen met je Google Sheet)
-            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']
+            # Zorg dat de kolomnamen kloppen met wat we verwachten
+            # We gaan ervan uit dat je Sheet nu 5 kolommen heeft: Datum, Symo, Galvo, Totaal, Oogst/dag
+            expected_cols = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']
+            
+            # Als de sheet minder dan 5 kolommen heeft, voeg de missende toe
+            while len(df.columns) < 5:
+                df[f'Extra_{len(df.columns)}'] = ""
+                
+            df.columns = expected_cols
             historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
             table_df = df
 except: pass
@@ -145,8 +140,20 @@ except: pass
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
-# --- JAAROVERZICHT TABEL ---
-st.subheader("📅 Jaaroverzicht") 
+# --- LIVE DETAILS TABEL ---
+st.subheader("📊 Details per Omvormer (Live)")
+oogst_data = {
+    "Inverter": [f"{icon_s} Symo", f"{icon_g} Galvo", "✨ Totaal"],
+    "Live (W)": [f"{val_s:,.0f}", f"{val_g:,.0f}", f"{val_t:,.0f}"],
+    "Piek (W)": [f"{st.session_state.p_symo_peak:,.0f}", f"{st.session_state.p_galvo_peak:,.0f}", f"{st.session_state.p_symo_peak + st.session_state.p_galvo_peak:,.0f}"],
+    "Oogst/dag (kWh)": [f"{kwh_s:.2f}", f"{kwh_g:.2f}", f"{kwh_t:.2f}"]
+}
+st.table(pd.DataFrame(oogst_data))
+
+st.divider()
+
+# --- JAAROVERZICHT TABEL (MET NIEUWE KOLOM) ---
+st.subheader("📅 Jaaroverzicht (Historie)") 
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=400)
 

@@ -8,13 +8,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - DEFINITIEVE VERSIE ☀️⚡
+# SOLAR PIEK PRO - JAAROVERZICHT VERSIE ☀️⚡
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# De unieke Google Script URL voor de archivering
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -86,7 +85,6 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
 # --- AUTO-ARCHIVEREN OM 20:30 ---
 target_uur = 20
 target_min = 30
-
 if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
@@ -139,9 +137,13 @@ with c3:
     st.metric("Piek", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
-st.subheader("💚 Maandoverzicht") 
+
+# --- JAAROVERZICHT ---
+st.subheader("📅 Jaaroverzicht") 
 if not table_df.empty:
-    st.table(table_df.iloc[::-1].head(15))
+    # head(15) is verwijderd, iloc[::-1] zorgt dat de nieuwste datum bovenaan staat
+    # st.dataframe maakt de tabel interactief en scrollbaar
+    st.dataframe(table_df.iloc[::-1], use_container_width=True, height=400)
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)

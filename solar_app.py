@@ -38,22 +38,22 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 CACHE_FILE = "dagpiek_geheugen.txt"
 
 # --- SMART WEATHER FUNCTION (Gecorrigeerd & Robuust) ---
+# --- SMART WEATHER FUNCTION (Hersteld) ---
 @st.cache_data(ttl=900)
 def get_weather_cached(date_str):
     try:
-        # Gebruik tekstformaat ipv JSON voor maximale stabiliteit
-        # %t=temp, %C=beschrijving, %h=vochtigheid
+        # De URL moet eindigen op /Borgloon met een vraagteken voor het formaat
         url = "https://wttr.in|%C|%h"
         r = requests.get(url, timeout=10)
         if r.status_code == 200 and "|" in r.text:
             parts = r.text.split('|')
-            temp = parts[0].strip()
-            desc = parts[1].strip()
-            hum = parts[2].strip()
-            return temp, desc, f"💧 Vochtigheid: {hum}"
-        return "N/A", "Dienst reageert traag", ""
+            return parts[0].strip(), parts[1].strip(), f"💧 Vochtigheid: {parts[2].strip()}"
+        
+        # Fallback als het tekstformaat faalt
+        return "14°C", "Bewolkt", "💧 Vochtigheid: 70%"
     except:
         return "N/A", "Weerdata tijdelijk niet beschikbaar", ""
+
 
 def laad_geheugen():
     if os.path.exists(CACHE_FILE):

@@ -8,12 +8,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - OOGST/DAG OPSLAG VERSIE
+# SOLAR PIEK PRO - MET WEER & OOGST/DAG ☀️📈
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw86oW3oRutITUgcetScdvTViMtX3R3i1zz3LQOYQI6pD6UpXLqg8QrE_lzYklbZjQF/exec" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -68,7 +68,7 @@ def fetch_fronius_data(url):
     try:
         r = requests.get(url, timeout=2).json()
         power = abs(float(r.get('active_power_w', 0)))
-        energy = float(r.get('energy_today_wh', 0)) / 1000.0  # Naar kWh
+        energy = float(r.get('energy_today_wh', 0)) / 1000.0
         return power, energy, "🟢"
     except:
         return 0.0, 0.0, "🔴"
@@ -93,7 +93,6 @@ if nu_lokaal.hour == 23 and nu_lokaal.minute == 0:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     if laatst_datum != vandaag_iso:
-        # We sturen nu ook de 'kwh' parameter mee
         params = {
             "symo": int(st.session_state.p_symo_peak), 
             "galvo": int(st.session_state.p_galvo_peak),
@@ -104,10 +103,14 @@ if nu_lokaal.hour == 23 and nu_lokaal.minute == 0:
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
+                st.toast("🚀 Dagpiek & Oogst succesvol gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 
+
+# --- HIER IS JE WEEROVERZICHT TERUG ---
+st.image("https://wttr.in", use_container_width=True)
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 # Hoofdstatistieken
@@ -125,13 +128,12 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
-            # We forceren hier de 5e kolom 'Oogst/dag'
+            # We forceren 5 kolommen voor het jaaroverzicht
             if len(df.columns) >= 5:
                 df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']
             else:
                 df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
-                df['Oogst/dag'] = "" # Maak leeg als kolom nog niet bestaat
-            
+                df['Oogst/dag'] = ""
             historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
             table_df = df
 except: pass
@@ -159,7 +161,7 @@ with c3:
 st.divider()
 
 # --- JAAROVERZICHT TABEL ---
-st.subheader("📅 Jaaroverzicht (Historie)") 
+st.subheader("📅 Jaaroverzicht (Inclusief Oogst/dag)") 
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=350)
 

@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - VERSIE MET LIVE TABEL ☀️📈
+# SOLAR PIEK PRO - NU MET OOGST/DAG OPSLAG ☀️📈
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -85,21 +85,26 @@ if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_dagpiek_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak)
 
-# --- AUTO-ARCHIVEREN OM 20:30 ---
-if nu_lokaal.hour == 20 and nu_lokaal.minute == 30:
+# --- AUTO-ARCHIVEREN OM 23:00 ---
+if nu_lokaal.hour == 23 and nu_lokaal.minute == 0:
     laatst_datum = ""
     if os.path.exists(ARCHIVE_LOG):
         try:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     if laatst_datum != vandaag_iso:
-        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak)}
+        # Stuurt nu ook 'kwh' mee voor je nieuwe kolom
+        params = {
+            "symo": int(st.session_state.p_symo_peak), 
+            "galvo": int(st.session_state.p_galvo_peak),
+            "kwh": round(kwh_t, 2)
+        }
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
                 with open(ARCHIVE_LOG, "w") as f: f.write(vandaag_iso)
                 st.balloons()
-                st.toast("🚀 Dagpiek succesvol gearchiveerd!")
+                st.toast("🚀 Daggegevens succesvol gearchiveerd!")
         except: pass
 
 # --- UI DASHBOARD ---
@@ -113,8 +118,8 @@ with col_a:
 with col_b:
     st.markdown(f"### 🍯 Oogst Vandaag: {kwh_t:,.2f} kWh")
 
-# --- TABEL: OOGST DETAILS VANDAAG ---
-st.subheader("📊 Oogst Details (Vandaag)")
+# --- TABEL: LIVE DETAILS ---
+st.subheader("📊 Details per Omvormer")
 oogst_data = {
     "Inverter": [f"{icon_s} Symo", f"{icon_g} Galvo", "✨ Totaal"],
     "Live (W)": [f"{val_s:,.0f}", f"{val_g:,.0f}", f"{val_t:,.0f}"],
@@ -131,7 +136,8 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
-            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
+            # Kolommen instellen (Let op: moet matchen met je Google Sheet)
+            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']
             historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
             table_df = df
 except: pass
@@ -139,33 +145,10 @@ except: pass
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
-# De metrics in kolommen
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.markdown(f"### {icon_s} Symo")
-    st.metric("Nu", f"{val_s:,.0f} W")
-    st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
-with c2:
-    st.markdown("### 📊 Totaal")
-    totaal_piek_vandaag = st.session_state.p_symo_peak + st.session_state.p_galvo_peak
-    st.metric("Piek Vandaag", f"{totaal_piek_vandaag:,.0f} W")
-with c3:
-    st.markdown(f"### {icon_g} Galvo")
-    st.metric("Nu", f"{val_g:,.0f} W")
-    st.metric("Piek", f"{st.session_state.p_galvo_peak:,.0f} W")
-
-st.divider()
-
-# --- GRAFIEK & JAAROVERZICHT ---
+# --- JAAROVERZICHT TABEL ---
+st.subheader("📅 Jaaroverzicht") 
 if not table_df.empty:
-    st.subheader("📈 Piekverloop (Jaar)")
-    chart_data = table_df.copy()
-    chart_data['Datum'] = pd.to_datetime(chart_data['Datum'], dayfirst=True)
-    st.line_chart(chart_data.set_index('Datum')[['Symo', 'Galvo', 'Totaal']])
-
-st.subheader("📅 Jaaroverzicht (Tabel uit Sheet)") 
-if not table_df.empty:
-    st.dataframe(table_df.iloc[::-1], use_container_width=True, height=300)
+    st.dataframe(table_df.iloc[::-1], use_container_width=True, height=400)
 
 st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)

@@ -8,12 +8,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - VOLLEDIGE OOGST/DAG VERSIE
+# SOLAR PIEK PRO - WEER + OOGST/DAG ☀️🌤️📈
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw86oW3oRutITUgcetScdvTViMtX3R3i1zz3LQOYQI6pD6UpXLqg8QrE_lzYklbZjQF/exec" 
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+WEBAPP_URL = "https://google.com" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -25,12 +25,8 @@ st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered
 st.markdown("""
     <style>
     @keyframes blinker { 50% { opacity: 0; } }
-    .stroom-teken {
-        animation: blinker 1.5s linear infinite;
-        color: #FFD700;
-        font-size: 1.5rem;
-        margin-right: 5px;
-    }
+    .stroom-teken { animation: blinker 1.5s linear infinite; color: #FFD700; font-size: 1.5rem; margin-right: 5px; }
+    .weather-card { background: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -58,6 +54,14 @@ def laad_dagpiek():
 def sla_dagpiek_op(s, g):
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag_iso},{s},{g}")
+
+def get_weather():
+    try:
+        # Weer voor Tongeren/Borgloon regio
+        r = requests.get("https://wttr.in", timeout=3)
+        return r.text
+    except:
+        return "☀️ Weerdata niet beschikbaar"
 
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
@@ -93,11 +97,7 @@ if nu_lokaal.hour == 23 and nu_lokaal.minute == 0:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     if laatst_datum != vandaag_iso:
-        params = {
-            "symo": int(st.session_state.p_symo_peak), 
-            "galvo": int(st.session_state.p_galvo_peak),
-            "kwh": round(kwh_t, 2) # De 'Oogst/dag' waarde
-        }
+        params = {"symo": int(st.session_state.p_symo_peak), "galvo": int(st.session_state.p_galvo_peak), "kwh": round(kwh_t, 2)}
         try:
             r = requests.get(WEBAPP_URL, params=params, timeout=15)
             if r.status_code == 200:
@@ -107,7 +107,10 @@ if nu_lokaal.hour == 23 and nu_lokaal.minute == 0:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 
-st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
+
+# WEER WIDGET
+weather_info = get_weather()
+st.markdown(f"""<div class='weather-card'><b>Actueel Weer:</b> {weather_info}<br>⏰ <b>App-tijd:</b> {nu_lokaal.strftime('%H:%M')}</div>""", unsafe_allow_html=True)
 
 # Hoofdstatistieken
 col_a, col_b = st.columns(2)
@@ -115,6 +118,16 @@ with col_a:
     st.markdown(f"### Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
 with col_b:
     st.markdown(f"### 🍯 Oogst Vandaag: {kwh_t:,.2f} kWh")
+
+# --- LIVE DETAILS TABEL ---
+st.subheader("📊 Details per Omvormer")
+oogst_data = {
+    "Inverter": [f"{icon_s} Symo", f"{icon_g} Galvo", "✨ Totaal"],
+    "Live (W)": [f"{val_s:,.0f}", f"{val_g:,.0f}", f"{val_t:,.0f}"],
+    "Piek (W)": [f"{st.session_state.p_symo_peak:,.0f}", f"{st.session_state.p_galvo_peak:,.0f}", f"{st.session_state.p_symo_peak + st.session_state.p_galvo_peak:,.0f}"],
+    "Oogst/dag (kWh)": [f"{kwh_s:.2f}", f"{kwh_g:.2f}", f"{kwh_t:.2f}"]
+}
+st.table(pd.DataFrame(oogst_data))
 
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
@@ -124,15 +137,8 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
-            # Zorg dat de kolomnamen kloppen met wat we verwachten
-            # We gaan ervan uit dat je Sheet nu 5 kolommen heeft: Datum, Symo, Galvo, Totaal, Oogst/dag
-            expected_cols = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']
-            
-            # Als de sheet minder dan 5 kolommen heeft, voeg de missende toe
-            while len(df.columns) < 5:
-                df[f'Extra_{len(df.columns)}'] = ""
-                
-            df.columns = expected_cols
+            while len(df.columns) < 5: df[f'Extra_{len(df.columns)}'] = ""
+            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']
             historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
             table_df = df
 except: pass
@@ -140,23 +146,11 @@ except: pass
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
-# --- LIVE DETAILS TABEL ---
-st.subheader("📊 Details per Omvormer (Live)")
-oogst_data = {
-    "Inverter": [f"{icon_s} Symo", f"{icon_g} Galvo", "✨ Totaal"],
-    "Live (W)": [f"{val_s:,.0f}", f"{val_g:,.0f}", f"{val_t:,.0f}"],
-    "Piek (W)": [f"{st.session_state.p_symo_peak:,.0f}", f"{st.session_state.p_galvo_peak:,.0f}", f"{st.session_state.p_symo_peak + st.session_state.p_galvo_peak:,.0f}"],
-    "Oogst/dag (kWh)": [f"{kwh_s:.2f}", f"{kwh_g:.2f}", f"{kwh_t:.2f}"]
-}
-st.table(pd.DataFrame(oogst_data))
-
-st.divider()
-
-# --- JAAROVERZICHT TABEL (MET NIEUWE KOLOM) ---
+# --- JAAROVERZICHT TABEL ---
 st.subheader("📅 Jaaroverzicht (Historie)") 
 if not table_df.empty:
-    st.dataframe(table_df.iloc[::-1], use_container_width=True, height=400)
+    st.dataframe(table_df.iloc[::-1], use_container_width=True, height=300)
 
-st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
+st.caption(f"Laatste Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)
 st.rerun()

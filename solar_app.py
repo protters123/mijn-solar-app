@@ -8,12 +8,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - WEER + OOGST/DAG OPSLAG
+# SOLAR PIEK PRO - OOGST/DAG OPSLAG VERSIE
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://google.com" 
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw86oW3oRutITUgcetScdvTViMtX3R3i1zz3LQOYQI6pD6UpXLqg8QrE_lzYklbZjQF/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -21,17 +21,15 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek", page_icon="☀️", layout="centered")
 
-# --- CSS VOOR ANIMATIE & WEER ---
+# --- CSS VOOR ANIMATIE ---
 st.markdown("""
     <style>
     @keyframes blinker { 50% { opacity: 0; } }
-    .stroom-teken { animation: blinker 1.5s linear infinite; color: #FFD700; font-size: 1.5rem; }
-    .weather-box { 
-        background: #f0f2f6; 
-        padding: 15px; 
-        border-radius: 10px; 
-        border-left: 5px solid #FFD700;
-        margin-bottom: 20px;
+    .stroom-teken {
+        animation: blinker 1.5s linear infinite;
+        color: #FFD700;
+        font-size: 1.5rem;
+        margin-right: 5px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -61,14 +59,6 @@ def sla_dagpiek_op(s, g):
     with open(CACHE_FILE, "w") as f:
         f.write(f"{vandaag_iso},{s},{g}")
 
-def get_weather():
-    try:
-        # Haalt een schone regel weerinformatie op voor Tongeren
-        r = requests.get("https://wttr.in", timeout=3)
-        return r.text.strip()
-    except:
-        return "☀️ Weerbericht niet beschikbaar"
-
 # --- INITIALISEREN ---
 if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
@@ -78,7 +68,7 @@ def fetch_fronius_data(url):
     try:
         r = requests.get(url, timeout=2).json()
         power = abs(float(r.get('active_power_w', 0)))
-        energy = float(r.get('energy_today_wh', 0)) / 1000.0
+        energy = float(r.get('energy_today_wh', 0)) / 1000.0  # Naar kWh
         return power, energy, "🟢"
     except:
         return 0.0, 0.0, "🔴"
@@ -103,6 +93,7 @@ if nu_lokaal.hour == 23 and nu_lokaal.minute == 0:
             with open(ARCHIVE_LOG, "r") as f: laatst_datum = f.read().strip()
         except: pass
     if laatst_datum != vandaag_iso:
+        # We sturen nu ook de 'kwh' parameter mee
         params = {
             "symo": int(st.session_state.p_symo_peak), 
             "galvo": int(st.session_state.p_galvo_peak),
@@ -117,15 +108,7 @@ if nu_lokaal.hour == 23 and nu_lokaal.minute == 0:
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Piek") 
-
-# WEERAPP SECTIE
-weer = get_weather()
-st.markdown(f"""
-    <div class='weather-box'>
-        <b>Actueel Weer:</b> {weer}<br>
-        ⏰ <b>App-tijd:</b> {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})
-    </div>
-""", unsafe_allow_html=True)
+st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
 # Hoofdstatistieken
 col_a, col_b = st.columns(2)
@@ -142,12 +125,13 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
-            # We forceren de kolommen inclusief Oogst/dag
+            # We forceren hier de 5e kolom 'Oogst/dag'
             if len(df.columns) >= 5:
                 df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']
             else:
                 df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
-                df['Oogst/dag'] = ""
+                df['Oogst/dag'] = "" # Maak leeg als kolom nog niet bestaat
+            
             historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
             table_df = df
 except: pass
@@ -155,7 +139,6 @@ except: pass
 st.metric("🏆 All-time Record", f"{max(historical_max, val_t):,.0f} W")
 st.divider()
 
-# Gedetailleerde metrics
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(f"### {icon_s} Symo")
@@ -180,6 +163,6 @@ st.subheader("📅 Jaaroverzicht (Historie)")
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=350)
 
-st.caption(f"Laatste Update: {nu_lokaal.strftime('%H:%M:%S')}")
+st.caption(f"Update: {nu_lokaal.strftime('%H:%M:%S')}")
 time.sleep(2)
 st.rerun()

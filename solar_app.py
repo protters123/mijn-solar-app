@@ -8,7 +8,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO + WEERSTATION ☀️🌦️
+# SOLAR PIEK PRO + SMART WEATHER ☀️🌦️
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -21,12 +21,11 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek & Weer", page_icon="☀️", layout="centered")
 
-# --- CSS VOOR ANIMATIE & STYLING ---
 st.markdown("""
     <style>
     @keyframes blinker { 50% { opacity: 0; } }
     .stroom-teken { animation: blinker 1.5s linear infinite; color: #FFD700; font-size: 1.5rem; margin-right: 5px; }
-    .weather-card { background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #ffaa00; }
+    .weather-card { background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #ffaa00; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -36,20 +35,21 @@ vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
 vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 CACHE_FILE = "dagpiek_geheugen.txt"
-ARCHIVE_LOG = "laat_gearchiveerd.txt"
 
-# --- WEER DATA OPHALEN (Simpel & Snel) ---
-def get_weather():
+# --- SMART WEATHER FUNCTION (Cache 15 min) ---
+@st.cache_data(ttl=900)
+def get_weather_cached(date_str):
     try:
-        # We gebruiken de JSON api van wttr.in voor Borgloon
-        r = requests.get("https://wttr.in", timeout=3).json()
+        # We halen specifiek de data voor Borgloon op in JSON formaat
+        r = requests.get("https://wttr.in", timeout=5).json()
         current = r['current_condition'][0]
         temp = current['temp_C']
+        # Pak Nederlandse beschrijving indien beschikbaar
         desc = current['lang_nl'][0]['value'] if 'lang_nl' in current else current['weatherDesc'][0]['value']
         cloud = current['cloudcover']
-        return f"{temp}°C", desc, f"☁️ Bewolking: {cloud}%"
-    except:
-        return "N/A", "Geen weerdata", ""
+        return f"{temp}°C", desc.capitalize(), f"☁️ Bewolking: {cloud}%"
+    except Exception as e:
+        return "N/A", "Weerdienst tijdelijk offline", ""
 
 def laad_geheugen():
     if os.path.exists(CACHE_FILE):
@@ -94,12 +94,12 @@ if val_t > st.session_state.p_total_peak:
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Dashboard")
 
-# Weer sectie bovenaan
-temp, desc, cloud = get_weather()
+# Weer sectie met de nieuwe cache functie
+temp, desc, cloud = get_weather_cached(vandaag_iso)
 st.markdown(f"""
     <div class="weather-card">
-        <h4>Lokaal Weer (Borgloon)</h4>
-        <b>{temp}</b> | {desc} | {cloud}
+        <h4 style='margin:0;'>Lokaal Weer (Borgloon)</h4>
+        <span style='font-size: 1.2rem;'><b>{temp}</b> | {desc} | {cloud}</span>
     </div>
 """, unsafe_allow_html=True)
 

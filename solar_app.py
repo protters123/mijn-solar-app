@@ -34,7 +34,7 @@ nu_lokaal = datetime.now(tz)
 vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
 vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
-CACHE_FILE = "dagpiek_geheugen.txt"
+CACHE_FILE = "hoogste_piek.txt"
 
 # --- SMART WEATHER FUNCTION (NU ECHT GECORRIGEERD) ---
 @st.cache_data(ttl=900)

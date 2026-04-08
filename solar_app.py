@@ -8,12 +8,11 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO - JAAR + GRAFIEK VERSIE ☀️📈
+# SOLAR PIEK PRO - VERSIE MET KWH OOGST ☀️📈
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -42,7 +41,7 @@ vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
 vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 CACHE_FILE = "dagpiek_geheugen.txt"
-ARCHIVE_LOG = "laatst_gearchiveerd.txt"
+ARCHIVE_LOG = "laat_gearchiveerd.txt"
 
 def laad_dagpiek():
     if os.path.exists(CACHE_FILE):
@@ -65,16 +64,20 @@ if 'p_symo_peak' not in st.session_state:
     s_start, g_start = laad_dagpiek()
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = s_start, g_start
 
-def fetch_status(url):
+def fetch_fronius_data(url):
     try:
         r = requests.get(url, timeout=2).json()
-        return abs(float(r['active_power_w'])), "🟢"
-    except: return 0.0, "🔴"
+        power = abs(float(r.get('active_power_w', 0)))
+        energy = float(r.get('energy_today_wh', 0)) / 1000.0  # Omzetten naar kWh
+        return power, energy, "🟢"
+    except:
+        return 0.0, 0.0, "🔴"
 
 # --- LIVE DATA OPHALEN ---
-val_s, icon_s = fetch_status(URL_1)
-val_g, icon_g = fetch_status(URL_2)
+val_s, kwh_s, icon_s = fetch_fronius_data(URL_1)
+val_g, kwh_g, icon_g = fetch_fronius_data(URL_2)
 val_t = val_s + val_g
+kwh_t = kwh_s + kwh_g
 
 # Update Dagpieken
 if val_s > st.session_state.p_symo_peak or val_g > st.session_state.p_galvo_peak:
@@ -105,7 +108,12 @@ if nu_lokaal.hour == target_uur and nu_lokaal.minute == target_min:
 st.title("☀️ Solar Piek") 
 st.write(f"⏰ App-tijd: {nu_lokaal.strftime('%H:%M')} ({vandaag_nl})")
 
-st.markdown(f"### Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
+# Hoofdstatistieken
+col_a, col_b = st.columns(2)
+with col_a:
+    st.markdown(f"### Totaal Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
+with col_b:
+    st.markdown(f"### 🍯 Oogst Vandaag: {kwh_t:,.2f} kWh")
 
 # --- DATA LADEN UIT SHEET ---
 historical_max = 3729.0
@@ -115,7 +123,6 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
-            # Kolommen netjes benoemen
             df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal']
             historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
             table_df = df
@@ -129,21 +136,23 @@ with c1:
     st.markdown(f"### {icon_s} Symo")
     st.metric("Nu", f"{val_s:,.0f} W")
     st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
+    st.caption(f"Vandaag: {kwh_s:,.2f} kWh")
 with c2:
-    st.markdown("### ⚡ Totaal")
+    st.markdown("### 📊 Totaal")
     totaal_piek_vandaag = st.session_state.p_symo_peak + st.session_state.p_galvo_peak
     st.metric("Piek Vandaag", f"{totaal_piek_vandaag:,.0f} W")
+    st.caption(f"Totaal: {kwh_t:,.2f} kWh")
 with c3:
     st.markdown(f"### {icon_g} Galvo")
     st.metric("Nu", f"{val_g:,.0f} W")
     st.metric("Piek", f"{st.session_state.p_galvo_peak:,.0f} W")
+    st.caption(f"Vandaag: {kwh_g:,.2f} kWh")
 
 st.divider()
 
 # --- GRAFIEK ---
 if not table_df.empty:
     st.subheader("📈 Piekverloop (Jaar)")
-    # We bereiden data voor de grafiek voor
     chart_data = table_df.copy()
     chart_data['Datum'] = pd.to_datetime(chart_data['Datum'], dayfirst=True)
     st.line_chart(chart_data.set_index('Datum')[['Symo', 'Galvo', 'Totaal']])

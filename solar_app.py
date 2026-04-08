@@ -43,14 +43,9 @@ def get_weather_cached(date_str):
         # DE CORRECTIE: Je moet ?format= gebruiken en de locatie (Borgloon) toevoegen
        url = "https://wttr.in/Borgloon?format=%t|%C|%h|m"
           r = requests.get(url, timeout=10)
-        
         if r.status_code == 200 and "|" in r.text:
             parts = r.text.split('|')
-            # parts[0] is nu de temperatuur (bijv. +14°C)
-            # parts[1] is de conditie (bijv. Licht Bewolkt)
-            # parts[2] is de vochtigheid (bijv. 65%)
             return parts[0].strip(), parts[1].strip(), f"💧 Vochtigheid: {parts[2].strip()}"
-        
         return "14°C", "Licht Bewolkt", "💧 Vochtigheid: 65%"
     except Exception as e:
         return "N/A", f"Fout: {str(e)}", ""

@@ -64,15 +64,32 @@ def laad_geheugen_uit_sheet(df):
     except: pass
     return 0.0, 0.0, 0.0
 
-def sla_naar_sheets(s, g, t):
-    """Stuurt data naar Google Apps Script met foutmelding op scherm"""
-    try:
-        payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t}
-        r = requests.post(WEBAPP_URL, json=payload, timeout=10)
-        if r.status_code != 200:
-            st.error(f"Fout bij opslaan: HTTP {r.status_code}")
-    except Exception as e:
-        st.error(f"Verbindingsfout naar Sheets: {e}")
+# --- LIVE DATA VERWERKING ---
+val_s, icon_s = fetch_fronius_data(URL_1)
+val_g, icon_g = fetch_fronius_data(URL_2)
+val_t = val_s + val_g
+
+# Update de pieken alleen in het geheugen van de app
+if val_t > st.session_state.p_total_peak:
+    st.session_state.p_total_peak = val_t
+    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
+    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
+
+# --- AVOND OPSLAG LOGICA (23:00) ---
+huidige_tijd = nu_lokaal.strftime("%H:%M")
+opslaan_vanaf = "23:00"
+
+# Als het 23:00 is geweest EN we hebben vandaag nog niet opgeslagen:
+if huidige_tijd >= opslaan_vanaf and st.session_state.laatste_opslag_datum != vandaag_iso:
+    sla_naar_sheets(
+        round(st.session_state.p_symo_peak), 
+        round(st.session_state.p_galvo_peak), 
+        round(st.session_state.p_total_peak)
+    )
+    # Markeer als gedaan voor vandaag
+    st.session_state.laatste_opslag_datum = vandaag_iso
+    st.toast(f"✅ Dagtotalen opgeslagen naar Google Sheets!", icon="💾")
+
 
 def fetch_fronius_data(url):
     try:
@@ -100,17 +117,17 @@ except:
 
 # --- INITIALISATIE SESSION STATE ---
 if 'p_total_peak' not in st.session_state:
-    # Bij eerste run: laad piek van vandaag uit de sheet data
     s_p, g_p, t_p = laad_geheugen_uit_sheet(table_df)
     st.session_state.p_symo_peak = s_p
     st.session_state.p_galvo_peak = g_p
     st.session_state.p_total_peak = t_p
-
+# Nieuw: onthoud of we vandaag al de avond-update hebben gedaan
+if 'laatste_opslag_datum' not in st.session_state:
+    st.session_state.laatste_opslag_datum = ""
 # --- LIVE DATA VERWERKING ---
 val_s, icon_s = fetch_fronius_data(URL_1)
 val_g, icon_g = fetch_fronius_data(URL_2)
 val_t = val_s + val_g
-
 # Update pieken als de huidige opbrengst hoger is
 if val_t > st.session_state.p_total_peak:
     # Werk de pieken in de sessie bij
@@ -161,5 +178,5 @@ if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=250)
 
 # Ververs elke 5 seconden (Streamlit Cloud is trager dan lokaal)
-time.sleep(5)
+time.sleep(2)
 st.rerun()

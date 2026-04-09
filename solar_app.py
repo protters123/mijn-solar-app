@@ -103,7 +103,7 @@ if val_t > st.session_state.p_total_peak:
 
 # --- OPSLAG LOGICA (23:00) ---
 huidige_tijd = nu_lokaal.strftime("%H:%M")
-if huidige_tijd >= "23:00" and st.session_state.laatste_opslag_datum != vandaag_iso:
+if huidige_tijd >= "17:12" and st.session_state.laatste_opslag_datum != vandaag_iso:
     if sla_naar_sheets(round(st.session_state.p_symo_peak), round(st.session_state.p_galvo_peak), round(st.session_state.p_total_peak)):
         st.session_state.laatste_opslag_datum = vandaag_iso
         st.toast("✅ Dagtotalen opgeslagen!", icon="💾")

@@ -12,7 +12,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwqIAlRlPVEIEh5qP48xVbzW36rJA1f1EQPCcoqce5O2D7R_qhrT83F1mHt2AHpS5_1/exec" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwcyMXGSjPmp-UMoLBwtVmlTDt4DkwxgybwFa6XhkKu6Xi5etot-9tsD5ELEhT9AaOG/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -27,30 +27,33 @@ vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
 vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 # --- DATA FUNCTIES ---
-def sla_naar_sheets(s, g, t):
-    """Verzendt de huidige pieken naar Google Sheets"""
+def sla_naar_sheets(s, g, t, oogst):
+    """Verzendt de pieken en de dagopbrengst naar Google Sheets"""
     try:
-        payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t}
+        payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t, "oogst": oogst}
         r = requests.post(WEBAPP_URL, json=payload, timeout=10)
         return r.status_code == 200
     except:
         return False
 
-def fetch_fronius_data(url):
+def fetch_hw_data(url):
+    """Haalt wattage en dag-energie op van HomeWizard meter"""
     try:
         r = requests.get(url, timeout=2).json()
         power = round(abs(float(r.get('active_power_w', 0))))
-        return power, "🟢"
+        # HomeWizard kWh meters hebben vaak een 'external_devices' of direct 'energy_delivered_tariffs'
+        # We proberen de standaard 'total_power_export_kwh' (som van alle tarieven)
+        kwh_totaal = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
+        return power, kwh_totaal, "🟢"
     except:
-        return 0, "🔴"
+        return 0, 0.0, "🔴"
 
 def laad_geheugen_uit_sheet():
-    """Haalt de hoogste bekende waarden van vandaag op uit de Google Sheet"""
     try:
         res = requests.get(CSV_URL, timeout=10)
         if res.status_code == 200:
             df = pd.read_csv(io.StringIO(res.text))
-            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Extra'][:len(df.columns)]
+            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst'][:len(df.columns)]
             vandaag_data = df[df['Datum'] == vandaag_nl]
             if not vandaag_data.empty:
                 return (
@@ -89,80 +92,72 @@ except: pass
 if 'huidige_datum' not in st.session_state:
     st.session_state.huidige_datum = vandaag_iso
 
-# Reset check: als het na middernacht is, gaan alle tellers naar 0
 if st.session_state.huidige_datum != vandaag_iso:
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
     st.session_state.p_total_peak = 0.0
-    st.session_state.laatste_opslag_datum = ""
+    st.session_state.start_kwh_dag = None
     st.session_state.huidige_datum = vandaag_iso
     st.rerun()
 
-# Herstel pieken uit de sheet bij herstart van de app
 if 'p_total_peak' not in st.session_state or st.session_state.p_total_peak == 0:
     s_p, g_p, t_p = laad_geheugen_uit_sheet()
-    st.session_state.p_symo_peak = s_p
-    st.session_state.p_galvo_peak = g_p
-    st.session_state.p_total_peak = t_p
-    st.session_state.laatste_opslag_datum = ""
+    st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak = s_p, g_p, t_p
 
 # --- LIVE DATA VERWERKING ---
-val_s, icon_s = fetch_fronius_data(URL_1)
-val_g, icon_g = fetch_fronius_data(URL_2)
+val_s, kwh_s, icon_s = fetch_hw_data(URL_1)
+val_g, kwh_g, icon_g = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# Update pieken in sessie-geheugen
+# kWh Berekening (Slaat de stand op van de eerste keer dat de app vandaag start)
+if 'start_kwh_dag' not in st.session_state or st.session_state.start_kwh_dag is None:
+    st.session_state.start_kwh_dag = kwh_s + kwh_g
+
+oogst_vandaag = round((kwh_s + kwh_g) - st.session_state.start_kwh_dag, 2)
+
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
 
-# --- AVOND OPSLAG LOGICA (23:00) ---
+# --- AVOND OPSLAG LOGICA ---
 huidige_tijd = nu_lokaal.strftime("%H:%M")
-if huidige_tijd >= "23:00" and st.session_state.laatste_opslag_datum != vandaag_iso:
+if huidige_tijd >= "23:00" and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
     if st.session_state.p_total_peak > 0:
-        if sla_naar_sheets(round(st.session_state.p_symo_peak), round(st.session_state.p_galvo_peak), round(st.session_state.p_total_peak)):
+        if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag):
             st.session_state.laatste_opslag_datum = vandaag_iso
-            st.toast("✅ Dagtotalen definitief opgeslagen!", icon="💾")
+            st.toast("✅ Dagtotalen opgeslagen!", icon="💾")
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Dashboard")
-
 temp, desc, hum = get_weather_cached(vandaag_iso)
-st.markdown(f'<div style="background:#f0f2f6;padding:15px;border-radius:10px;border-left:5px solid #ffaa00;margin-bottom:20px;">'
-            f'<h4 style="margin:0;">Lokaal Weer (Borgloon)</h4>'
-            f'<span><b>{temp}</b> | {desc} | {hum}</span></div>', unsafe_allow_html=True)
+st.markdown(f'<div style="background:#f0f2f6;padding:15px;border-radius:10px;border-left:5px solid #ffaa00;margin-bottom:20px;"><b>{temp}</b> | {desc} | {hum}</div>', unsafe_allow_html=True)
 
 st.write(f"⏰ {nu_lokaal.strftime('%H:%M')} | {vandaag_nl}")
 st.markdown(f"## Live: ⚡ {val_t:,.0f} W")
+st.markdown(f"### Oogst vandaag: 📈 {oogst_vandaag} kWh")
 
 st.metric("🏆 All-time Record", f"{max(historical_max, st.session_state.p_total_peak):,.0f} W")
 st.divider()
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown(f"### {icon_s} Symo")
-    st.metric("Nu", f"{val_s:,.0f} W")
-    st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
+    st.metric(f"{icon_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak} W")
 with c2:
-    st.markdown("### ⚡ Dag")
-    st.metric("Piek", f"{st.session_state.p_total_peak:,.0f} W")
+    st.metric("📊 Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak} W")
 with c3:
-    st.markdown(f"### {icon_g} Galvo")
-    st.metric("Nu", f"{val_g:,.0f} W")
-    st.metric("Piek", f"{st.session_state.p_galvo_peak:,.0f} W")
+    st.metric(f"{icon_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak} W")
 
 st.divider()
 st.subheader("☀️ Historiek") 
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=250)
 
-# Back-up knop voor overdag
-if st.button("💾 Sla huidige piek nu op (Back-up)"):
-    if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak):
-        st.success("Back-up opgeslagen in Google Sheet!")
+if st.button("💾 Sla nu op (Back-up)"):
+    if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag):
+        st.success(f"Opgeslagen! Oogst: {oogst_vandaag} kWh")
         time.sleep(1)
         st.rerun()
 
-time.sleep(2)
+time.sleep(5)
 st.rerun()

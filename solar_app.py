@@ -145,7 +145,7 @@ with c1:
     st.metric("Nu", f"{val_s:,.0f} W")
     st.metric("Piek", f"{st.session_state.p_symo_peak:,.0f} W")
 with c2:
-    st.markdown("### 📊 Dag")
+    st.markdown("### ⚡ Dag")
     st.metric("Piek", f"{st.session_state.p_total_peak:,.0f} W")
 with c3:
     st.markdown(f"### {icon_g} Galvo")
@@ -153,7 +153,7 @@ with c3:
     st.metric("Piek", f"{st.session_state.p_galvo_peak:,.0f} W")
 
 st.divider()
-st.subheader("📅 Historiek") 
+st.subheader("☀️ Historiek") 
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=250)
 

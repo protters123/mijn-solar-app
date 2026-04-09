@@ -13,7 +13,7 @@ import pytz
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 # Gebruik je meest recente Webapp URL van je Google Script
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxzZ6mHZr9_0TKvHiE0sPtIt3IOgY7bXBquWbAgAajRucZa3SyVGldjoTEX9nzRrxwD/exec" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzVrPFclvLCa7NBXA8GAt0iXPP5lTUmZbu607kNjFmfY0RmY4D18DWX3uw-BH7ClQym/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"

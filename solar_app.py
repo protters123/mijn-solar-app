@@ -41,8 +41,6 @@ def fetch_hw_data(url):
     try:
         r = requests.get(url, timeout=2).json()
         power = round(abs(float(r.get('active_power_w', 0))))
-        # HomeWizard kWh meters hebben vaak een 'external_devices' of direct 'energy_delivered_tariffs'
-        # We proberen de standaard 'total_power_export_kwh' (som van alle tarieven)
         kwh_totaal = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
         return power, kwh_totaal, "🟢"
     except:
@@ -109,7 +107,6 @@ val_s, kwh_s, icon_s = fetch_hw_data(URL_1)
 val_g, kwh_g, icon_g = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# kWh Berekening (Slaat de stand op van de eerste keer dat de app vandaag start)
 if 'start_kwh_dag' not in st.session_state or st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
 
@@ -140,13 +137,14 @@ st.markdown(f"### Oogst vandaag: 📈 {oogst_vandaag} kWh")
 st.metric("🏆 All-time Record", f"{max(historical_max, st.session_state.p_total_peak):,.0f} W")
 st.divider()
 
+# Aangepaste volgorde: Symo | Galvo | Totaal
 c1, c2, c3 = st.columns(3)
 with c1:
     st.metric(f"{icon_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak} W")
 with c2:
-    st.metric("📊 Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak} W")
-with c3:
     st.metric(f"{icon_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak} W")
+with c3:
+    st.metric("📊 Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak} W")
 
 st.divider()
 st.subheader("☀️ Historiek") 

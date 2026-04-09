@@ -28,7 +28,6 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 # --- DATA FUNCTIES ---
 def sla_naar_sheets(s, g, t, oogst):
-    """Verzendt de pieken en de dagopbrengst naar Google Sheets"""
     try:
         payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t, "oogst": oogst}
         r = requests.post(WEBAPP_URL, json=payload, timeout=10)
@@ -37,14 +36,23 @@ def sla_naar_sheets(s, g, t, oogst):
         return False
 
 def fetch_hw_data(url):
-    """Haalt wattage en dag-energie op van HomeWizard meter"""
+    """Haalt wattage en dag-energie op met veiligheidscheck op 0-waarden"""
     try:
         r = requests.get(url, timeout=2).json()
         power = round(abs(float(r.get('active_power_w', 0))))
-        kwh_totaal = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
+        
+        # Haal export T1 en T2 op
+        t1 = float(r.get('total_power_export_t1_kwh', 0))
+        t2 = float(r.get('total_power_export_t2_kwh', 0))
+        kwh_totaal = t1 + t2
+        
+        # VEILIGHEID: Als meter 0 geeft (storing), geef None terug voor kWh
+        if kwh_totaal <= 0:
+            return power, None, "🔴"
+            
         return power, kwh_totaal, "🟢"
     except:
-        return 0, 0.0, "🔴"
+        return 0, None, "🔴"
 
 def laad_geheugen_uit_sheet():
     try:
@@ -107,10 +115,15 @@ val_s, kwh_s, icon_s = fetch_hw_data(URL_1)
 val_g, kwh_g, icon_g = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-if 'start_kwh_dag' not in st.session_state or st.session_state.start_kwh_dag is None:
-    st.session_state.start_kwh_dag = kwh_s + kwh_g
+# kWh Startwaarde vastleggen (alleen als beide meters geldige data geven)
+if kwh_s is not None and kwh_g is not None:
+    if 'start_kwh_dag' not in st.session_state or st.session_state.start_kwh_dag is None:
+        st.session_state.start_kwh_dag = kwh_s + kwh_g
 
-oogst_vandaag = round((kwh_s + kwh_g) - st.session_state.start_kwh_dag, 2)
+# Bereken oogst (blijft 0.00 zolang er geen startwaarde is)
+oogst_vandaag = 0.00
+if st.session_state.get('start_kwh_dag') is not None and kwh_s is not None and kwh_g is not None:
+    oogst_vandaag = round((kwh_s + kwh_g) - st.session_state.start_kwh_dag, 2)
 
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
@@ -137,7 +150,6 @@ st.markdown(f"### Oogst vandaag: 📈 {oogst_vandaag} kWh")
 st.metric("🏆 All-time Record", f"{max(historical_max, st.session_state.p_total_peak):,.0f} W")
 st.divider()
 
-# Aangepaste volgorde: Symo | Galvo | Totaal
 c1, c2, c3 = st.columns(3)
 with c1:
     st.metric(f"{icon_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak} W")

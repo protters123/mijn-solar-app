@@ -28,6 +28,7 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 # --- DATA FUNCTIES ---
 def sla_naar_sheets(s, g, t):
+    """Verzendt de huidige pieken naar Google Sheets"""
     try:
         payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t}
         r = requests.post(WEBAPP_URL, json=payload, timeout=10)
@@ -43,15 +44,20 @@ def fetch_fronius_data(url):
     except:
         return 0, "🔴"
 
-def laad_geheugen_uit_sheet(df):
+def laad_geheugen_uit_sheet():
+    """Haalt de hoogste bekende waarden van vandaag op uit de Google Sheet"""
     try:
-        if not df.empty:
+        res = requests.get(CSV_URL, timeout=10)
+        if res.status_code == 200:
+            df = pd.read_csv(io.StringIO(res.text))
+            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Extra'][:len(df.columns)]
             vandaag_data = df[df['Datum'] == vandaag_nl]
             if not vandaag_data.empty:
-                s = float(vandaag_data.iloc[-1]['Symo'])
-                g = float(vandaag_data.iloc[-1]['Galvo'])
-                t = float(vandaag_data.iloc[-1]['Totaal'])
-                return s, g, t
+                return (
+                    float(vandaag_data['Symo'].max()), 
+                    float(vandaag_data['Galvo'].max()), 
+                    float(vandaag_data['Totaal'].max())
+                )
     except: pass
     return 0.0, 0.0, 0.0
 
@@ -68,24 +74,22 @@ def get_weather_cached(date_str):
     except:
         return "N/A", "Weerdata niet bereikbaar", ""
 
-# --- DATA OPHALEN UIT SHEET ---
+# --- DATA OPHALEN VOOR HISTORIEK ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
-    res = requests.get(CSV_URL, timeout=10)
+    res = requests.get(CSV_URL, timeout=5)
     if res.status_code == 200:
-        df = pd.read_csv(io.StringIO(res.text))
-        if not df.empty:
-            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag'][:len(df.columns)]
-            historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
-            table_df = df
+        table_df = pd.read_csv(io.StringIO(res.text))
+        table_df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag'][:len(table_df.columns)]
+        historical_max = pd.to_numeric(table_df['Totaal'], errors='coerce').max()
 except: pass
 
-# --- INITIALISATIE & RESET LOGICA (Nieuwe dag = Nul) ---
+# --- INITIALISATIE & RESET LOGICA ---
 if 'huidige_datum' not in st.session_state:
     st.session_state.huidige_datum = vandaag_iso
 
-# Reset check: als de datum is veranderd, zet alles op nul
+# Reset check: als het na middernacht is, gaan alle tellers naar 0
 if st.session_state.huidige_datum != vandaag_iso:
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
@@ -94,9 +98,9 @@ if st.session_state.huidige_datum != vandaag_iso:
     st.session_state.huidige_datum = vandaag_iso
     st.rerun()
 
-# Normale initialisatie als sessie leeg is
-if 'p_total_peak' not in st.session_state:
-    s_p, g_p, t_p = laad_geheugen_uit_sheet(table_df)
+# Herstel pieken uit de sheet bij herstart van de app
+if 'p_total_peak' not in st.session_state or st.session_state.p_total_peak == 0:
+    s_p, g_p, t_p = laad_geheugen_uit_sheet()
     st.session_state.p_symo_peak = s_p
     st.session_state.p_galvo_peak = g_p
     st.session_state.p_total_peak = t_p
@@ -107,18 +111,19 @@ val_s, icon_s = fetch_fronius_data(URL_1)
 val_g, icon_g = fetch_fronius_data(URL_2)
 val_t = val_s + val_g
 
-# Update pieken in geheugen
+# Update pieken in sessie-geheugen
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
 
-# --- OPSLAG LOGICA (23:00) ---
+# --- AVOND OPSLAG LOGICA (23:00) ---
 huidige_tijd = nu_lokaal.strftime("%H:%M")
 if huidige_tijd >= "23:00" and st.session_state.laatste_opslag_datum != vandaag_iso:
-    if sla_naar_sheets(round(st.session_state.p_symo_peak), round(st.session_state.p_galvo_peak), round(st.session_state.p_total_peak)):
-        st.session_state.laatste_opslag_datum = vandaag_iso
-        st.toast("✅ Dagtotalen opgeslagen!", icon="💾")
+    if st.session_state.p_total_peak > 0:
+        if sla_naar_sheets(round(st.session_state.p_symo_peak), round(st.session_state.p_galvo_peak), round(st.session_state.p_total_peak)):
+            st.session_state.laatste_opslag_datum = vandaag_iso
+            st.toast("✅ Dagtotalen definitief opgeslagen!", icon="💾")
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Dashboard")
@@ -151,6 +156,13 @@ st.divider()
 st.subheader("📅 Historiek") 
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=250)
+
+# Back-up knop voor overdag
+if st.button("💾 Sla huidige piek nu op (Back-up)"):
+    if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak):
+        st.success("Back-up opgeslagen in Google Sheet!")
+        time.sleep(1)
+        st.rerun()
 
 time.sleep(2)
 st.rerun()

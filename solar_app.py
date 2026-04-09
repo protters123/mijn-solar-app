@@ -28,7 +28,6 @@ vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
 # --- DATA FUNCTIES ---
 def sla_naar_sheets(s, g, t):
-    """Stuurt data naar Google Apps Script"""
     try:
         payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t}
         r = requests.post(WEBAPP_URL, json=payload, timeout=10)
@@ -82,7 +81,20 @@ try:
             table_df = df
 except: pass
 
-# --- INITIALISATIE SESSION STATE ---
+# --- INITIALISATIE & RESET LOGICA (Nieuwe dag = Nul) ---
+if 'huidige_datum' not in st.session_state:
+    st.session_state.huidige_datum = vandaag_iso
+
+# Reset check: als de datum is veranderd, zet alles op nul
+if st.session_state.huidige_datum != vandaag_iso:
+    st.session_state.p_symo_peak = 0.0
+    st.session_state.p_galvo_peak = 0.0
+    st.session_state.p_total_peak = 0.0
+    st.session_state.laatste_opslag_datum = ""
+    st.session_state.huidige_datum = vandaag_iso
+    st.rerun()
+
+# Normale initialisatie als sessie leeg is
 if 'p_total_peak' not in st.session_state:
     s_p, g_p, t_p = laad_geheugen_uit_sheet(table_df)
     st.session_state.p_symo_peak = s_p

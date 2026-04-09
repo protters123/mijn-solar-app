@@ -13,7 +13,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbx5aBd074ppyMn-gj0OFY1JeU_WmhmM1m0WYvIiv_4RBTYmq-44BFdIVgi0nOZBf5Z8/exec" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwqIAlRlPVEIEh5qP48xVbzW36rJA1f1EQPCcoqce5O2D7R_qhrT83F1mHt2AHpS5_1/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"

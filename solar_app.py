@@ -3,7 +3,6 @@ import requests
 import time
 import pandas as pd
 import io
-import os
 from datetime import datetime
 import pytz
 
@@ -21,21 +20,42 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek & Weer", page_icon="☀️", layout="centered")
 
-# --- STYLING ---
-st.markdown("""
-    <style>
-    @keyframes blinker { 50% { opacity: 0; } }
-    .stroom-teken { animation: blinker 1.5s linear infinite; color: #FFD700; font-size: 1.5rem; margin-right: 5px; }
-    .weather-card { background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 5px solid #ffaa00; margin-bottom: 20px; }
-    </style>
-""", unsafe_allow_html=True)
-
+# --- TIJD & DATUM ---
 tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
 vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
 vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
 
-# --- SMART WEATHER FUNCTION ---
+# --- DATA FUNCTIES ---
+def sla_naar_sheets(s, g, t):
+    """Stuurt data naar Google Apps Script"""
+    try:
+        payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t}
+        r = requests.post(WEBAPP_URL, json=payload, timeout=10)
+        return r.status_code == 200
+    except:
+        return False
+
+def fetch_fronius_data(url):
+    try:
+        r = requests.get(url, timeout=2).json()
+        power = round(abs(float(r.get('active_power_w', 0))))
+        return power, "🟢"
+    except:
+        return 0, "🔴"
+
+def laad_geheugen_uit_sheet(df):
+    try:
+        if not df.empty:
+            vandaag_data = df[df['Datum'] == vandaag_nl]
+            if not vandaag_data.empty:
+                s = float(vandaag_data.iloc[-1]['Symo'])
+                g = float(vandaag_data.iloc[-1]['Galvo'])
+                t = float(vandaag_data.iloc[-1]['Totaal'])
+                return s, g, t
+    except: pass
+    return 0.0, 0.0, 0.0
+
 @st.cache_data(ttl=900)
 def get_weather_cached(date_str):
     try:
@@ -46,61 +66,10 @@ def get_weather_cached(date_str):
             parts = r.text.split('|')
             return parts[0].strip(), parts[1].strip(), f"💧 Vochtigheid: {parts[2].strip()}"
         return "14°C", "Licht Bewolkt", "💧 Vochtigheid: 65%"
-    except Exception:
+    except:
         return "N/A", "Weerdata niet bereikbaar", ""
 
-# --- DATA FUNCTIES ---
-def laad_geheugen_uit_sheet(df):
-    """Haalt de piek van vandaag uit de ingeladen dataframe"""
-    try:
-        if not df.empty:
-            # Zoek of vandaag al in de lijst staat
-            vandaag_data = df[df['Datum'] == vandaag_nl]
-            if not vandaag_data.empty:
-                s = float(vandaag_data.iloc[-1]['Symo'])
-                g = float(vandaag_data.iloc[-1]['Galvo'])
-                t = float(vandaag_data.iloc[-1]['Totaal'])
-                return s, g, t
-    except: pass
-    return 0.0, 0.0, 0.0
-
-# --- LIVE DATA VERWERKING ---
-val_s, icon_s = fetch_fronius_data(URL_1)
-val_g, icon_g = fetch_fronius_data(URL_2)
-val_t = val_s + val_g
-
-# Update de pieken alleen in het geheugen van de app
-if val_t > st.session_state.p_total_peak:
-    st.session_state.p_total_peak = val_t
-    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
-    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
-
-# --- AVOND OPSLAG LOGICA (23:00) ---
-huidige_tijd = nu_lokaal.strftime("%H:%M")
-opslaan_vanaf = "23:00"
-
-# Als het 23:00 is geweest EN we hebben vandaag nog niet opgeslagen:
-if huidige_tijd >= opslaan_vanaf and st.session_state.laatste_opslag_datum != vandaag_iso:
-    sla_naar_sheets(
-        round(st.session_state.p_symo_peak), 
-        round(st.session_state.p_galvo_peak), 
-        round(st.session_state.p_total_peak)
-    )
-    # Markeer als gedaan voor vandaag
-    st.session_state.laatste_opslag_datum = vandaag_iso
-    st.toast(f"✅ Dagtotalen opgeslagen naar Google Sheets!", icon="💾")
-
-
-def fetch_fronius_data(url):
-    try:
-        r = requests.get(url, timeout=2).json()
-        # Voeg round() toe om alleen hele getallen te krijgen
-        power = round(abs(float(r.get('active_power_w', 0))))
-        return power, "🟢"
-    except:
-        return 0.0, "🔴"
-
-# --- DATA OPHALEN (HISTORIEK & PEAK) ---
+# --- DATA OPHALEN UIT SHEET ---
 historical_max = 3729.0
 table_df = pd.DataFrame()
 try:
@@ -108,12 +77,10 @@ try:
     if res.status_code == 200:
         df = pd.read_csv(io.StringIO(res.text))
         if not df.empty:
-            # Hernoem kolommen voor consistentie
             df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag'][:len(df.columns)]
             historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
             table_df = df
-except:
-    st.warning("Kon historiek niet laden uit Google Sheets.")
+except: pass
 
 # --- INITIALISATIE SESSION STATE ---
 if 'p_total_peak' not in st.session_state:
@@ -121,40 +88,36 @@ if 'p_total_peak' not in st.session_state:
     st.session_state.p_symo_peak = s_p
     st.session_state.p_galvo_peak = g_p
     st.session_state.p_total_peak = t_p
-# Nieuw: onthoud of we vandaag al de avond-update hebben gedaan
-if 'laatste_opslag_datum' not in st.session_state:
     st.session_state.laatste_opslag_datum = ""
+
 # --- LIVE DATA VERWERKING ---
 val_s, icon_s = fetch_fronius_data(URL_1)
 val_g, icon_g = fetch_fronius_data(URL_2)
 val_t = val_s + val_g
-# Update pieken als de huidige opbrengst hoger is
+
+# Update pieken in geheugen
 if val_t > st.session_state.p_total_peak:
-    # Werk de pieken in de sessie bij
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
-    
-    # Sla het volledige pakket op (Symo + Galvo + Totaal)
-    sla_naar_sheets(
-        round(st.session_state.p_symo_peak), 
-        round(st.session_state.p_galvo_peak), 
-        round(st.session_state.p_total_peak)
-    )
+
+# --- OPSLAG LOGICA (23:00) ---
+huidige_tijd = nu_lokaal.strftime("%H:%M")
+if huidige_tijd >= "23:00" and st.session_state.laatste_opslag_datum != vandaag_iso:
+    if sla_naar_sheets(round(st.session_state.p_symo_peak), round(st.session_state.p_galvo_peak), round(st.session_state.p_total_peak)):
+        st.session_state.laatste_opslag_datum = vandaag_iso
+        st.toast("✅ Dagtotalen opgeslagen!", icon="💾")
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Dashboard")
 
 temp, desc, hum = get_weather_cached(vandaag_iso)
-st.markdown(f"""
-    <div class="weather-card">
-        <h4 style='margin:0;'>Lokaal Weer (Borgloon)</h4>
-        <span style='font-size: 1.2rem;'><b>{temp}</b> | {desc} | {hum}</span>
-    </div>
-""", unsafe_allow_html=True)
+st.markdown(f'<div style="background:#f0f2f6;padding:15px;border-radius:10px;border-left:5px solid #ffaa00;margin-bottom:20px;">'
+            f'<h4 style="margin:0;">Lokaal Weer (Borgloon)</h4>'
+            f'<span><b>{temp}</b> | {desc} | {hum}</span></div>', unsafe_allow_html=True)
 
 st.write(f"⏰ {nu_lokaal.strftime('%H:%M')} | {vandaag_nl}")
-st.markdown(f"## Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
+st.markdown(f"## Live: ⚡ {val_t:,.0f} W")
 
 st.metric("🏆 All-time Record", f"{max(historical_max, st.session_state.p_total_peak):,.0f} W")
 st.divider()
@@ -177,6 +140,5 @@ st.subheader("📅 Historiek")
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=250)
 
-# Ververs elke 5 seconden (Streamlit Cloud is trager dan lokaal)
 time.sleep(2)
 st.rerun()

@@ -111,14 +111,19 @@ val_s, icon_s = fetch_fronius_data(URL_1)
 val_g, icon_g = fetch_fronius_data(URL_2)
 val_t = val_s + val_g
 
-# Update piek als de huidige opbrengst hoger is dan wat we weten (uit sheet of sessie)
-if val_t > st.session_state.p_total_peak and val_t > 10: # >10W om ruis te voorkomen
+# Update pieken als de huidige opbrengst hoger is
+if val_t > st.session_state.p_total_peak:
+    # Werk de pieken in de sessie bij
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     
-    # Direct verzenden naar Google Sheets
-    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak)
+    # Sla het volledige pakket op (Symo + Galvo + Totaal)
+    sla_naar_sheets(
+        round(st.session_state.p_symo_peak), 
+        round(st.session_state.p_galvo_peak), 
+        round(st.session_state.p_total_peak)
+    )
 
 # --- UI DASHBOARD ---
 st.title("☀️ Solar Dashboard")

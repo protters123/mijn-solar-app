@@ -148,5 +148,5 @@ st.subheader("📅 Historiek")
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=250)
 
-time.sleep(5)
+time.sleep(2)
 st.rerun()

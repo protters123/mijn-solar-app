@@ -12,7 +12,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-# Gebruik je meest recente Webapp URL van je Google Script
+# Zorg dat dit de URL is van je allerlaatste 'DisplayValues' Google Script!
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxDfDLkd_6mvmwzulY1bnvSgHEmkeuBOcrbrFjMkbmJSnVhxk-jTda8hC_Cg_zfS1eZ/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
@@ -57,16 +57,17 @@ def laad_geheugen_uit_sheet():
         res = requests.get(CSV_URL, timeout=10)
         if res.status_code == 200:
             df = pd.read_csv(io.StringIO(res.text))
-            # Kolommen: Datum, Symo, Galvo, Totaal, Oogst/dag, StartKWh
+            # Verwachte kolommen: Datum(A), Symo(B), Galvo(C), Totaal(D), Oogst(E), StartKWh(F)
             df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst', 'StartKWh'][:len(df.columns)]
             vandaag_data = df[df['Datum'] == vandaag_nl]
             if not vandaag_data.empty:
                 rij = vandaag_data.iloc[-1]
+                # Gebruik pd.to_numeric om errors bij lege cellen te voorkomen
                 return (
-                    float(rij['Symo']), 
-                    float(rij['Galvo']), 
-                    float(rij['Totaal']),
-                    float(rij['StartKWh']) if pd.notnull(rij['StartKWh']) else None
+                    float(pd.to_numeric(rij['Symo'], errors='coerce') or 0.0), 
+                    float(pd.to_numeric(rij['Galvo'], errors='coerce') or 0.0), 
+                    float(pd.to_numeric(rij['Totaal'], errors='coerce') or 0.0),
+                    float(pd.to_numeric(rij['StartKWh'], errors='coerce')) if pd.notnull(rij['StartKWh']) else None
                 )
     except: pass
     return 0.0, 0.0, 0.0, None
@@ -91,7 +92,7 @@ try:
     if res.status_code == 200:
         table_df = pd.read_csv(io.StringIO(res.text))
         table_df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh'][:len(table_df.columns)]
-        historical_max = pd.to_numeric(table_df['Totaal'], errors='coerce').max()
+        historical_max = pd.to_numeric(table_df['Totaal'], errors='coerce').max() or 3729.0
 except: pass
 
 # --- INITIALISATIE & RESET ---
@@ -112,13 +113,19 @@ val_s, kwh_s, icon_s = fetch_hw_data(URL_1)
 val_g, kwh_g, icon_g = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# Ochtend vastlegging (06:00 ping)
-if kwh_s and kwh_g and st.session_state.start_kwh_dag is None:
-    st.session_state.start_kwh_dag = kwh_s + kwh_g
-    sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
+# Ochtend vastlegging (wordt getriggerd door Cron-job 06:00 of eerste browser bezoek)
+if kwh_s is not None and kwh_g is not None:
+    if st.session_state.start_kwh_dag is None:
+        st.session_state.start_kwh_dag = kwh_s + kwh_g
+        # Meteen vastleggen in de sheet als ijkpunt
+        sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-oogst_vandaag = round((kwh_s + kwh_g) - st.session_state.start_kwh_dag, 2) if st.session_state.start_kwh_dag and kwh_s and kwh_g else 0.0
+# Oogst berekenen
+oogst_vandaag = 0.0
+if st.session_state.start_kwh_dag and kwh_s is not None and kwh_g is not None:
+    oogst_vandaag = round((kwh_s + kwh_g) - st.session_state.start_kwh_dag, 2)
 
+# Update pieken
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = max(val_s, st.session_state.p_symo_peak), max(val_g, st.session_state.p_galvo_peak)
@@ -127,6 +134,10 @@ if val_t > st.session_state.p_total_peak:
 st.title("☀️ Solar Dashboard")
 temp, desc, hum = get_weather_cached(vandaag_iso)
 st.info(f"**{temp}** | {desc} | {hum}")
+
+# Waarschuwing als de startwaarde ontbreekt (gebeurt alleen bij fouten in de sheet)
+if st.session_state.start_kwh_dag is None:
+    st.warning("⚠️ Geen startwaarde (StartKWh) gevonden voor vandaag. De oogst-teller staat tijdelijk op 0.")
 
 st.write(f"⏰ {nu_lokaal.strftime('%H:%M')} | Live: **{val_t:,.0f} W** | Oogst: **{oogst_vandaag} kWh**")
 st.metric("🏆 All-time Record", f"{max(historical_max, st.session_state.p_total_peak):,.0f} W")
@@ -141,7 +152,6 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 st.divider()
 st.subheader("📅 Historiek") 
 if not table_df.empty:
-    # Toon kolom A t/m E (StartKWh blijft verborgen hulpmiddel)
     st.dataframe(table_df.iloc[::-1, :5], use_container_width=True, height=250)
 
 if st.button("💾 Handmatige Back-up"):

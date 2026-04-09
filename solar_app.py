@@ -13,7 +13,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzgNANWap5p30jGUe96MF4dO2aU1O-WlCLav__RQLxQGOwbHJZzGBfcsfCGcjugQ5I2/exec" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbx5aBd074ppyMn-gj0OFY1JeU_WmhmM1m0WYvIiv_4RBTYmq-44BFdIVgi0nOZBf5Z8/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -77,7 +77,8 @@ def sla_naar_sheets(s, g, t):
 def fetch_fronius_data(url):
     try:
         r = requests.get(url, timeout=2).json()
-        power = abs(float(r.get('active_power_w', 0)))
+        # Voeg round() toe om alleen hele getallen te krijgen
+        power = round(abs(float(r.get('active_power_w', 0))))
         return power, "🟢"
     except:
         return 0.0, "🔴"

@@ -13,7 +13,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIBhDGzmQQvokyzBjYT0Nt8qiRFKtElxMCrhelxfPOLNF2NNbAgOP3PAGTSEQEsMmq/exec" 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzgNANWap5p30jGUe96MF4dO2aU1O-WlCLav__RQLxQGOwbHJZzGBfcsfCGcjugQ5I2/exec" 
 
 PUBLIEK_IP = "94.110.235.108" 
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -21,6 +21,7 @@ URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek & Weer", page_icon="☀️", layout="centered")
 
+# --- STYLING ---
 st.markdown("""
     <style>
     @keyframes blinker { 50% { opacity: 0; } }
@@ -33,8 +34,6 @@ tz = pytz.timezone('Europe/Brussels')
 nu_lokaal = datetime.now(tz)
 vandaag_iso = nu_lokaal.strftime('%Y-%m-%d')
 vandaag_nl = nu_lokaal.strftime('%d-%m-%Y')
-
-CACHE_FILE = "hoogste_piek.txt"
 
 # --- SMART WEATHER FUNCTION ---
 @st.cache_data(ttl=900)
@@ -50,28 +49,30 @@ def get_weather_cached(date_str):
     except Exception:
         return "N/A", "Weerdata niet bereikbaar", ""
 
-def laad_geheugen():
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                parts = f.read().strip().split(",")
-                if parts[0] == vandaag_iso:
-                    return float(parts[1]), float(parts[2]), float(parts[3])
-        except: pass
+# --- DATA FUNCTIES ---
+def laad_geheugen_uit_sheet(df):
+    """Haalt de piek van vandaag uit de ingeladen dataframe"""
+    try:
+        if not df.empty:
+            # Zoek of vandaag al in de lijst staat
+            vandaag_data = df[df['Datum'] == vandaag_nl]
+            if not vandaag_data.empty:
+                s = float(vandaag_data.iloc[-1]['Symo'])
+                g = float(vandaag_data.iloc[-1]['Galvo'])
+                t = float(vandaag_data.iloc[-1]['Totaal'])
+                return s, g, t
+    except: pass
     return 0.0, 0.0, 0.0
 
-def sla_geheugen_op(s, g, t):
-    try:
-        with open(CACHE_FILE, "w") as f:
-            f.write(f"{vandaag_iso},{s},{g},{t}")
-    except: pass
-
 def sla_naar_sheets(s, g, t):
+    """Stuurt data naar Google Apps Script met foutmelding op scherm"""
     try:
-        # Stuurt de nieuwe piek direct naar je Google Apps Script
         payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t}
-        requests.post(WEBAPP_URL, json=payload, timeout=5)
-    except: pass
+        r = requests.post(WEBAPP_URL, json=payload, timeout=10)
+        if r.status_code != 200:
+            st.error(f"Fout bij opslaan: HTTP {r.status_code}")
+    except Exception as e:
+        st.error(f"Verbindingsfout naar Sheets: {e}")
 
 def fetch_fronius_data(url):
     try:
@@ -81,24 +82,41 @@ def fetch_fronius_data(url):
     except:
         return 0.0, "🔴"
 
-# --- INITIALISATIE ---
+# --- DATA OPHALEN (HISTORIEK & PEAK) ---
+historical_max = 3729.0
+table_df = pd.DataFrame()
+try:
+    res = requests.get(CSV_URL, timeout=10)
+    if res.status_code == 200:
+        df = pd.read_csv(io.StringIO(res.text))
+        if not df.empty:
+            # Hernoem kolommen voor consistentie
+            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag'][:len(df.columns)]
+            historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
+            table_df = df
+except:
+    st.warning("Kon historiek niet laden uit Google Sheets.")
+
+# --- INITIALISATIE SESSION STATE ---
 if 'p_total_peak' not in st.session_state:
-    s_p, g_p, t_p = laad_geheugen()
-    st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak = s_p, g_p, t_p
+    # Bij eerste run: laad piek van vandaag uit de sheet data
+    s_p, g_p, t_p = laad_geheugen_uit_sheet(table_df)
+    st.session_state.p_symo_peak = s_p
+    st.session_state.p_galvo_peak = g_p
+    st.session_state.p_total_peak = t_p
 
 # --- LIVE DATA VERWERKING ---
 val_s, icon_s = fetch_fronius_data(URL_1)
 val_g, icon_g = fetch_fronius_data(URL_2)
 val_t = val_s + val_g
 
-# Update piek als de huidige opbrengst hoger is
-if val_t > st.session_state.p_total_peak:
+# Update piek als de huidige opbrengst hoger is dan wat we weten (uit sheet of sessie)
+if val_t > st.session_state.p_total_peak and val_t > 10: # >10W om ruis te voorkomen
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     
-    # Sla op in lokaal bestand én Google Sheets
-    sla_geheugen_op(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak)
+    # Direct verzenden naar Google Sheets
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak)
 
 # --- UI DASHBOARD ---
@@ -114,18 +132,6 @@ st.markdown(f"""
 
 st.write(f"⏰ {nu_lokaal.strftime('%H:%M')} | {vandaag_nl}")
 st.markdown(f"## Live: <span class='stroom-teken'>⚡</span> {val_t:,.0f} W", unsafe_allow_html=True)
-
-historical_max = 3729.0
-table_df = pd.DataFrame()
-try:
-    res = requests.get(CSV_URL, timeout=10)
-    if res.status_code == 200:
-        df = pd.read_csv(io.StringIO(res.text))
-        if not df.empty:
-            df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag'][:len(df.columns)]
-            historical_max = pd.to_numeric(df['Totaal'], errors='coerce').max()
-            table_df = df
-except: pass
 
 st.metric("🏆 All-time Record", f"{max(historical_max, st.session_state.p_total_peak):,.0f} W")
 st.divider()
@@ -148,5 +154,6 @@ st.subheader("📅 Historiek")
 if not table_df.empty:
     st.dataframe(table_df.iloc[::-1], use_container_width=True, height=250)
 
-time.sleep(2)
+# Ververs elke 5 seconden (Streamlit Cloud is trager dan lokaal)
+time.sleep(5)
 st.rerun()

@@ -144,7 +144,7 @@ with c1:
 with c2:
     st.metric(f"{icon_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak} W")
 with c3:
-    st.metric("📊 Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak} W")
+    st.metric("⚡⚡ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak} W")
 
 st.divider()
 st.subheader("☀️ Historiek") 

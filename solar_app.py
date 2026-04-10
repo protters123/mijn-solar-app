@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v3.0 - Piek onthouden + Mooie Weer Iconen
+# SOLAR PIEK PRO v3.2 - Dynamische Weer Emoji's
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,9 +24,8 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# ====================== SESSION STATE + LADEN UIT SHEET ======================
+# ====================== SESSION STATE ======================
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
-    # Laad altijd de laatste piek van vandaag uit de Sheet
     try:
         df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
         df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
@@ -38,13 +37,9 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
             st.session_state.p_galvo_peak = float(rij.get('Galvo', 0))
             st.session_state.p_total_peak = float(rij.get('Totaal', 0))
         else:
-            st.session_state.p_symo_peak = 0.0
-            st.session_state.p_galvo_peak = 0.0
-            st.session_state.p_total_peak = 0.0
+            st.session_state.p_symo_peak = st.session_state.p_galvo_peak = st.session_state.p_total_peak = 0.0
     except:
-        st.session_state.p_symo_peak = 0.0
-        st.session_state.p_galvo_peak = 0.0
-        st.session_state.p_total_peak = 0.0
+        st.session_state.p_symo_peak = st.session_state.p_galvo_peak = st.session_state.p_total_peak = 0.0
     
     st.session_state.start_kwh_dag = None
     st.session_state.laatste_opslag_datum = None
@@ -55,13 +50,9 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
     try:
         payload = {
-            "datum": vandaag_nl,
-            "symo": round(float(s), 1),
-            "galvo": round(float(g), 1),
-            "totaal": round(float(t), 1),
-            "oogst": round(float(oogst), 2),
-            "start_kwh": round(float(start_kwh), 3) if start_kwh is not None else None,
-            "actie": "update"
+            "datum": vandaag_nl, "symo": round(float(s),1), "galvo": round(float(g),1),
+            "totaal": round(float(t),1), "oogst": round(float(oogst),2),
+            "start_kwh": round(float(start_kwh),3) if start_kwh is not None else None, "actie": "update"
         }
         return requests.post(WEBAPP_URL, json=payload, timeout=10).status_code == 200
     except:
@@ -82,25 +73,31 @@ def get_weather():
         r = requests.get("https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
         
-        temp = parts[0].strip().replace("Â", "").replace("°C", "").replace("°", "") + "°C"
+        temp = parts[0].strip().replace("Â", "").replace("°", "") + "°C"
         desc = parts[1].strip()
         hum = parts[2].strip().rstrip('%')
         
-        # Weer-emoji mapping
-        desc_lower = desc.lower()
-        if "zon" in desc_lower or "helder" in desc_lower:
+        # Uitgebreide weer-emoji mapping
+        d = desc.lower()
+        if any(x in d for x in ["zonnig", "helder", "zon"]):
             icon = "☀️"
-        elif "licht bewolkt" in desc_lower:
+        elif any(x in d for x in ["licht bewolkt", "meest zonnig"]):
             icon = "⛅"
-        elif "bewolkt" in desc_lower:
+        elif any(x in d for x in ["bewolkt", "overwegend bewolkt"]):
             icon = "☁️"
-        elif "regen" in desc_lower:
+        elif any(x in d for x in ["regen", "buien", "neerslag"]):
             icon = "🌧️"
-        elif "mist" in desc_lower:
+        elif "onweer" in d or "bliksem" in d:
+            icon = "⛈️"
+        elif any(x in d for x in ["sneeuw", "sneeuwbuien"]):
+            icon = "❄️"
+        elif "mist" in d or "nevel" in d:
             icon = "🌫️"
+        elif "storm" in d or "wind" in d:
+            icon = "🌬️"
         else:
-            icon = "🌤️"
-            
+            icon = "🌤️"  # default
+        
         return temp, desc, hum, icon
     except:
         return "+11°C", "Bewolkt", "54", "☁️"
@@ -135,17 +132,12 @@ temp, desc, hum, weather_icon = get_weather()
 
 col1, col2, col3 = st.columns([1,2,1])
 with col1: st.metric("🌡️ Temperatuur", temp)
-with col2: st.markdown(f"**{weather_icon} {desc}**")
+with col2: st.markdown(f"**{weather_icon} {desc}**", unsafe_allow_html=True)
 with col3: st.metric("💧 Vochtigheid", f"{hum}%")
 
 st.divider()
 
-st.markdown(f"""
-    <h1 style='text-align: center; color: #FFB300; margin: 10px 0;'>
-        ⚡ {val_t:,.0f} Watt
-    </h1>
-""", unsafe_allow_html=True)
-
+st.markdown(f"<h1 style='text-align: center; color: #FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
 
 st.markdown(f"### 📈 Oogst vandaag: **{oogst_vandaag:.2f} kWh**")
@@ -172,7 +164,14 @@ try:
     st.dataframe(display_df.style.format({'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'}), 
                  use_container_width=True, height=380, hide_index=True)
 except:
-    st.info("Historiek wordt geladen...")
+    pass
+
+# Groot wolkje onderaan
+st.markdown("""
+    <div style='text-align: center; margin-top: 50px; opacity: 0.6;'>
+        <h1 style='font-size: 5rem; margin: 0;'>☁️</h1>
+    </div>
+""", unsafe_allow_html=True)
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,

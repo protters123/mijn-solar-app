@@ -7,7 +7,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v2.1 - Crashproof
+# SOLAR PIEK PRO v2.2 - Vandaag bovenaan
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -15,8 +15,8 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzvjNV9Tr1aHoSXX-SQrcTTf7xg3nHzqSzG66tIsAbhx9ioTfecz527eDHQ184qCeN6/exec"
 
 PUBLIEK_IP = "94.110.235.108"
-URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"   # Symo
-URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"   # Galvo
+URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
+URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="☀️", layout="centered")
 
@@ -61,20 +61,6 @@ def fetch_hw_data(url):
     except:
         return 0, None, "🔴"
 
-def laad_geheugen_uit_sheet():
-    try:
-        df = pd.read_csv(CSV_URL)
-        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst', 'StartKWh'][:len(df.columns)]
-        vandaag = df[df['Datum'] == vandaag_nl]
-        if vandaag.empty:
-            return 0.0, 0.0, 0.0, None
-        vandaag['Totaal'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
-        rij = vandaag.loc[vandaag['Totaal'].idxmax()]
-        return (float(rij.get('Symo',0)), float(rij.get('Galvo',0)), 
-                float(rij.get('Totaal',0)), float(rij['StartKWh']) if pd.notna(rij.get('StartKWh')) else None)
-    except:
-        return 0.0, 0.0, 0.0, None
-
 @st.cache_data(ttl=300)
 def get_weather():
     try:
@@ -82,29 +68,25 @@ def get_weather():
         parts = r.text.strip().split('|')
         return parts[0].strip(), parts[1].strip(), parts[2].strip()
     except:
-        return "+12°C", "Bewolkt", "55%"
+        return "+11°C", "Bewolkt", "54%"
 
-# Live data
+# ====================== LIVE DATA ======================
 val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# Start kWh vastleggen
 if kwh_s and kwh_g and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
     sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
 oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag else 0.0
 
-# Nieuwe piek opslaan
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
-    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, 
-                    val_t, oogst_vandaag, st.session_state.start_kwh_dag)
+    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, val_t, oogst_vandaag, st.session_state.start_kwh_dag)
 
-# Avond opslag
 if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, 
                     st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
@@ -142,47 +124,44 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# === HISTORIEK (crash-proof) ===
+# ====================== HISTORIEK - Vandaag bovenaan ======================
 st.subheader("📜 Historiek")
 
 try:
     df = pd.read_csv(CSV_URL)
-    # Flexibele kolomnamen
-    col_map = {col: col.strip() for col in df.columns}
-    df = df.rename(columns=col_map)
     
-    # Zorg voor juiste kolomnamen
-    display_cols = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst']
-    for i, col in enumerate(display_cols):
-        if i < len(df.columns):
-            df.columns.values[i] = col
-
-    df['Totaal'] = pd.to_numeric(df['Totaal'], errors='coerce')
-    df['Oogst'] = pd.to_numeric(df['Oogst'], errors='coerce')
+    # Kolommen veilig hernoemen
+    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst', 'StartKWh'][:len(df.columns)]
     
-    recent = df.sort_values('Datum', ascending=False).head(12)
+    # Datum omzetten naar echte datum voor correcte sortering
+    df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
+    df = df.sort_values('Datum_dt', ascending=False)  # Nieuwste bovenaan!
     
+    # Laatste 15 dagen tonen
+    recent = df.head(15).copy()
+    
+    # Formatteren voor weergave
     st.dataframe(
-        recent[display_cols].style.format({
+        recent[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst']].style.format({
             'Symo': '{:.0f}',
             'Galvo': '{:.0f}',
             'Totaal': '{:.0f}',
             'Oogst': '{:.2f}'
         }),
         use_container_width=True,
-        height=380,
+        height=420,
         hide_index=True
     )
 except Exception as e:
-    st.error("Kon historiek niet laden")
-    st.info("Controleer of je Google Sheet correct kolomnamen heeft: Datum, Symo, Galvo, Totaal, Oogst")
+    st.error("Probleem met laden van historiek")
+    st.info("Controleer of de kolom 'Datum' in het formaat dd-mm-yyyy staat.")
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
-    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
-                    st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
-    st.success("Opgeslagen!")
-    time.sleep(1)
-    st.rerun()
+    if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
+                       st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag):
+        st.success("✅ Opgeslagen!")
+        time.sleep(1)
+        st.rerun()
 
 time.sleep(5)
 st.rerun()

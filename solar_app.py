@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v2.7 - Gefixt (string → numeric)
+# SOLAR PIEK PRO v2.8 - Netjes & Schoon
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,30 +24,24 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# Session State
+# ====================== SESSION STATE ======================
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
-    st.session_state.p_symo_peak = 0.0
-    st.session_state.p_galvo_peak = 0.0
-    st.session_state.p_total_peak = 0.0
-    st.session_state.start_kwh_dag = None
-    st.session_state.laatste_opslag_datum = None
-    st.session_state.huidige_datum = vandaag_iso
-    st.session_state.initialized = True
+    st.session_state.update({
+        'p_symo_peak': 0.0, 'p_galvo_peak': 0.0, 'p_total_peak': 0.0,
+        'start_kwh_dag': None, 'laatste_opslag_datum': None,
+        'huidige_datum': vandaag_iso, 'initialized': True
+    })
 
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
     try:
         payload = {
-            "datum": vandaag_nl,
-            "symo": round(float(s), 1),
-            "galvo": round(float(g), 1),
-            "totaal": round(float(t), 1),
-            "oogst": round(float(oogst), 2),
-            "start_kwh": round(float(start_kwh), 3) if start_kwh is not None else None,
+            "datum": vandaag_nl, "symo": round(float(s),1), "galvo": round(float(g),1),
+            "totaal": round(float(t),1), "oogst": round(float(oogst),2),
+            "start_kwh": round(float(start_kwh),3) if start_kwh is not None else None,
             "actie": "update"
         }
-        r = requests.post(WEBAPP_URL, json=payload, timeout=10)
-        return r.status_code == 200
+        return requests.post(WEBAPP_URL, json=payload, timeout=10).status_code == 200
     except:
         return False
 
@@ -98,16 +92,24 @@ st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 temp, desc, hum = get_weather()
 col1, col2, col3 = st.columns([1,2,1])
 with col1: st.metric("🌡️ Temperatuur", temp)
-with col2: st.write(f"**{desc}**")
+with col2: st.markdown(f"**{desc}**")
 with col3: st.metric("💧 Vochtigheid", f"{hum}%")
 
 st.divider()
-st.markdown(f"<h1 style='text-align:center; color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
+
+st.markdown(f"""
+    <h1 style='text-align: center; color: #FFB300; margin: 10px 0;'>
+        ⚡ {val_t:,.0f} Watt
+    </h1>
+""", unsafe_allow_html=True)
+
 st.progress(min(val_t / 8000, 1.0))
+
 st.markdown(f"### 📈 Oogst vandaag: **{oogst_vandaag:.2f} kWh**")
 st.metric("🏆 All-time Record", f"{max(3729, st.session_state.p_total_peak):,.0f} W")
 
 st.divider()
+
 c1, c2, c3 = st.columns(3)
 with c1: st.metric("🟢 Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
 with c2: st.metric("🔴 Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
@@ -115,46 +117,38 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# ====================== HISTORIEK ======================
+# Historiek
 st.subheader("📜 Historiek")
 
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
     
-    # === BELANGRIJKE FIX: strings omzetten naar cijfers ===
     for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     
     df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
     df = df.sort_values('Datum_dt', ascending=False).reset_index(drop=True)
     
-    recent = df.head(15).copy()
-    
+    recent = df.head(15)
     display_df = recent[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].copy()
     display_df = display_df.rename(columns={'Oogst/dag': 'Oogst'})
     
     st.dataframe(
         display_df.style.format({
-            'Symo': '{:.0f}',
-            'Galvo': '{:.0f}',
-            'Totaal': '{:.0f}',
-            'Oogst': '{:.2f}'
+            'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'
         }),
         use_container_width=True,
-        height=420,
+        height=400,
         hide_index=True
     )
-    st.success("✅ Historiek succesvol geladen")
-
-except Exception as e:
-    st.error("Probleem met laden van historiek")
-    st.info(f"Fout: {e}")
+except:
+    st.info("Historiek wordt geladen...")
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
                        st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag):
-        st.success("✅ Opgeslagen!")
+        st.success("✅ Succesvol opgeslagen!")
         time.sleep(1)
         st.rerun()
 

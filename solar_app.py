@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v3.4 - Groot weer-icoon onder beschrijving
+# SOLAR PIEK PRO v3.5 - Weer-emoji in het midden
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -107,7 +107,8 @@ if val_t > st.session_state.p_total_peak:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, val_t, oogst_vandaag, st.session_state.start_kwh_dag)
 
 if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
-    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
+    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
+                    st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
     st.session_state.laatste_opslag_datum = vandaag_iso
 
 # ====================== UI ======================
@@ -116,17 +117,18 @@ st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum, weather_icon = get_weather()
 
-col1, col2, col3 = st.columns([1,2,1])
-with col1: st.metric("🌡️ Temperatuur", temp)
-with col2: st.markdown(f"**{weather_icon} {desc}**")
-with col3: st.metric("💧 Vochtigheid", f"{hum}%")
+# Weer sectie met emoji in het midden
+col1, col2, col3 = st.columns([1, 1.2, 1])
 
-# === GROOT WEER-ICOON DIRECT ONDER DE BESCHRIJVING ===
-st.markdown(f"""
-    <div style='text-align: center; margin: 10px 0 30px 0;'>
-        <span style='font-size: 6.5rem;'>{weather_icon}</span>
-    </div>
-""", unsafe_allow_html=True)
+with col1:
+    st.metric("🌡️ Temperatuur", temp)
+
+with col2:
+    st.markdown(f"**{desc}**")
+    st.markdown(f"<div style='text-align: center; font-size: 4.2rem; margin-top: -10px;'>{weather_icon}</div>", unsafe_allow_html=True)
+
+with col3:
+    st.metric("💧 Vochtigheid", f"{hum}%")
 
 st.divider()
 

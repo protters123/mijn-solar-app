@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v2.8 - Netjes & Schoon
+# SOLAR PIEK PRO v2.9 - Temperatuur & % Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,7 +24,7 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# ====================== SESSION STATE ======================
+# Session State
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
     st.session_state.update({
         'p_symo_peak': 0.0, 'p_galvo_peak': 0.0, 'p_total_peak': 0.0,
@@ -36,9 +36,12 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
     try:
         payload = {
-            "datum": vandaag_nl, "symo": round(float(s),1), "galvo": round(float(g),1),
-            "totaal": round(float(t),1), "oogst": round(float(oogst),2),
-            "start_kwh": round(float(start_kwh),3) if start_kwh is not None else None,
+            "datum": vandaag_nl,
+            "symo": round(float(s), 1),
+            "galvo": round(float(g), 1),
+            "totaal": round(float(t), 1),
+            "oogst": round(float(oogst), 2),
+            "start_kwh": round(float(start_kwh), 3) if start_kwh is not None else None,
             "actie": "update"
         }
         return requests.post(WEBAPP_URL, json=payload, timeout=10).status_code == 200
@@ -59,9 +62,12 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
-        return parts[0].strip(), parts[1].strip(), parts[2].strip()
+        temp = parts[0].strip().replace("°", "°")   # Fix encoding
+        desc = parts[1].strip()
+        hum = parts[2].strip().rstrip('%')          # Verwijder % als die er al staat
+        return temp, desc, hum
     except:
-        return "+11°C", "Bewolkt", "54%"
+        return "+11°C", "Bewolkt", "54"
 
 # ====================== LIVE DATA ======================
 val_s, kwh_s, _ = fetch_hw_data(URL_1)
@@ -90,8 +96,9 @@ st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum = get_weather()
+
 col1, col2, col3 = st.columns([1,2,1])
-with col1: st.metric("🌡️ Temperatuur", temp)
+with col1: st.metric("🌡️ Temperatuur", f"{temp}°C")
 with col2: st.markdown(f"**{desc}**")
 with col3: st.metric("💧 Vochtigheid", f"{hum}%")
 
@@ -143,12 +150,12 @@ try:
         hide_index=True
     )
 except:
-    st.info("Historiek wordt geladen...")
+    pass
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
                        st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag):
-        st.success("✅ Succesvol opgeslagen!")
+        st.success("✅ Opgeslagen!")
         time.sleep(1)
         st.rerun()
 

@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v3.5 - Weer-emoji in het midden
+# SOLAR PIEK PRO v3.6 - Temperatuur fix (geen dubbele °C)
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,7 +24,7 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# Session State + piek laden
+# ====================== SESSION STATE ======================
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
     try:
         df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
@@ -72,10 +72,15 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
-        temp = parts[0].strip().replace("Â", "") + "°C"
+        
+        # Temperatuur fix - voorkom dubbele °C
+        temp_str = parts[0].strip().replace("Â", "").replace("°C", "").replace("°", "").strip()
+        temp = f"{temp_str}°C"
+        
         desc = parts[1].strip()
         hum = parts[2].strip().rstrip('%')
         
+        # Weer emoji
         d = desc.lower()
         if any(x in d for x in ["zonnig", "helder", "zon"]): icon = "☀️"
         elif any(x in d for x in ["licht bewolkt"]): icon = "⛅"
@@ -89,7 +94,7 @@ def get_weather():
     except:
         return "+11°C", "Bewolkt", "54", "☁️"
 
-# Live data
+# ====================== LIVE DATA ======================
 val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
@@ -117,7 +122,6 @@ st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum, weather_icon = get_weather()
 
-# Weer sectie met emoji in het midden
 col1, col2, col3 = st.columns([1, 1.2, 1])
 
 with col1:
@@ -125,7 +129,7 @@ with col1:
 
 with col2:
     st.markdown(f"**{desc}**")
-    st.markdown(f"<div style='text-align: center; font-size: 4.2rem; margin-top: -10px;'>{weather_icon}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: center; font-size: 4rem; margin-top: -8px;'>{weather_icon}</div>", unsafe_allow_html=True)
 
 with col3:
     st.metric("💧 Vochtigheid", f"{hum}%")

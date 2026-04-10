@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v2.4 - Ultra Robuust
+# SOLAR PIEK PRO v2.5 - Force Kolommen
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -123,27 +123,23 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# ====================== HISTORIEK - Zeer robuust ======================
+# ====================== HISTORIEK - ULTRA ROBUUST ======================
 st.subheader("📜 Historiek")
 
 try:
-    df = pd.read_csv(CSV_URL, header=0)
+    # Lees CSV en forceer exact 6 kolommen
+    df = pd.read_csv(CSV_URL, header=0, usecols=[0,1,2,3,4,5])  # forceer eerste 6 kolommen
     
-    # Kolommen strippen en opschonen
-    df.columns = [col.strip() for col in df.columns]
-    
-    # Veiligste manier: kolommen hernoemen op basis van positie
-    expected_cols = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
-    df = df.iloc[:, :len(expected_cols)]  # alleen eerste 6 kolommen nemen
-    df.columns = expected_cols[:len(df.columns)]
+    # Forceer kolomnamen
+    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
     
     # Datum sorteren
     df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
-    df = df.sort_values('Datum_dt', ascending=False)
+    df = df.sort_values('Datum_dt', ascending=False).reset_index(drop=True)
     
     recent = df.head(15).copy()
     
-    # Schoon display
+    # Mooie weergave
     display_df = recent[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].copy()
     display_df = display_df.rename(columns={'Oogst/dag': 'Oogst'})
     
@@ -161,7 +157,7 @@ try:
 
 except Exception as e:
     st.error("Probleem met laden van historiek")
-    st.info("Probeer de Sheet te downloaden als CSV en opnieuw te uploaden, of controleer of rij 1 exact de kolomnamen bevat.")
+    st.info("Probeer de Sheet te downloaden als **CSV** en opnieuw te uploaden.")
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,

@@ -2,12 +2,11 @@ import streamlit as st
 import requests
 import time
 import pandas as pd
-import io
 from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v2.2 - Vandaag bovenaan
+# SOLAR PIEK PRO v2.3 - Exacte Sheet match
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -75,11 +74,11 @@ val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-if kwh_s and kwh_g and st.session_state.start_kwh_dag is None:
+if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
     sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag else 0.0
+oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None else 0.0
 
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
@@ -124,25 +123,27 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# ====================== HISTORIEK - Vandaag bovenaan ======================
+# ====================== HISTORIEK ======================
 st.subheader("📜 Historiek")
 
 try:
     df = pd.read_csv(CSV_URL)
     
-    # Kolommen veilig hernoemen
-    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst', 'StartKWh'][:len(df.columns)]
+    # Exacte kolomnamen uit jouw sheet
+    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh'][:len(df.columns)]
     
-    # Datum omzetten naar echte datum voor correcte sortering
+    # Datum omzetten voor correcte sortering
     df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
-    df = df.sort_values('Datum_dt', ascending=False)  # Nieuwste bovenaan!
+    df = df.sort_values('Datum_dt', ascending=False)   # Nieuwste bovenaan
     
-    # Laatste 15 dagen tonen
     recent = df.head(15).copy()
     
-    # Formatteren voor weergave
+    # Weergave
+    display_df = recent[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].copy()
+    display_df = display_df.rename(columns={'Oogst/dag': 'Oogst'})
+    
     st.dataframe(
-        recent[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst']].style.format({
+        display_df.style.format({
             'Symo': '{:.0f}',
             'Galvo': '{:.0f}',
             'Totaal': '{:.0f}',
@@ -154,12 +155,12 @@ try:
     )
 except Exception as e:
     st.error("Probleem met laden van historiek")
-    st.info("Controleer of de kolom 'Datum' in het formaat dd-mm-yyyy staat.")
+    st.info("Controleer de kolomnamen in je Google Sheet.")
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
                        st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag):
-        st.success("✅ Opgeslagen!")
+        st.success("✅ Succesvol opgeslagen!")
         time.sleep(1)
         st.rerun()
 

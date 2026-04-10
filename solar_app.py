@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v2.9 - Temperatuur & % Fix
+# SOLAR PIEK PRO v3.0 - Piek onthouden + Mooie Weer Iconen
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,13 +24,32 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# Session State
+# ====================== SESSION STATE + LADEN UIT SHEET ======================
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
-    st.session_state.update({
-        'p_symo_peak': 0.0, 'p_galvo_peak': 0.0, 'p_total_peak': 0.0,
-        'start_kwh_dag': None, 'laatste_opslag_datum': None,
-        'huidige_datum': vandaag_iso, 'initialized': True
-    })
+    # Laad altijd de laatste piek van vandaag uit de Sheet
+    try:
+        df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
+        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
+        vandaag = df[df['Datum'] == vandaag_nl]
+        if not vandaag.empty:
+            vandaag['Totaal'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
+            rij = vandaag.loc[vandaag['Totaal'].idxmax()]
+            st.session_state.p_symo_peak = float(rij.get('Symo', 0))
+            st.session_state.p_galvo_peak = float(rij.get('Galvo', 0))
+            st.session_state.p_total_peak = float(rij.get('Totaal', 0))
+        else:
+            st.session_state.p_symo_peak = 0.0
+            st.session_state.p_galvo_peak = 0.0
+            st.session_state.p_total_peak = 0.0
+    except:
+        st.session_state.p_symo_peak = 0.0
+        st.session_state.p_galvo_peak = 0.0
+        st.session_state.p_total_peak = 0.0
+    
+    st.session_state.start_kwh_dag = None
+    st.session_state.laatste_opslag_datum = None
+    st.session_state.huidige_datum = vandaag_iso
+    st.session_state.initialized = True
 
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
@@ -62,12 +81,29 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
-        temp = parts[0].strip().replace("°", "°")   # Fix encoding
+        
+        temp = parts[0].strip().replace("Â", "").replace("°C", "").replace("°", "") + "°C"
         desc = parts[1].strip()
-        hum = parts[2].strip().rstrip('%')          # Verwijder % als die er al staat
-        return temp, desc, hum
+        hum = parts[2].strip().rstrip('%')
+        
+        # Weer-emoji mapping
+        desc_lower = desc.lower()
+        if "zon" in desc_lower or "helder" in desc_lower:
+            icon = "☀️"
+        elif "licht bewolkt" in desc_lower:
+            icon = "⛅"
+        elif "bewolkt" in desc_lower:
+            icon = "☁️"
+        elif "regen" in desc_lower:
+            icon = "🌧️"
+        elif "mist" in desc_lower:
+            icon = "🌫️"
+        else:
+            icon = "🌤️"
+            
+        return temp, desc, hum, icon
     except:
-        return "+11°C", "Bewolkt", "54"
+        return "+11°C", "Bewolkt", "54", "☁️"
 
 # ====================== LIVE DATA ======================
 val_s, kwh_s, _ = fetch_hw_data(URL_1)
@@ -95,11 +131,11 @@ if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso
 st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
-temp, desc, hum = get_weather()
+temp, desc, hum, weather_icon = get_weather()
 
 col1, col2, col3 = st.columns([1,2,1])
-with col1: st.metric("🌡️ Temperatuur", f"{temp}°C")
-with col2: st.markdown(f"**{desc}**")
+with col1: st.metric("🌡️ Temperatuur", temp)
+with col2: st.markdown(f"**{weather_icon} {desc}**")
 with col3: st.metric("💧 Vochtigheid", f"{hum}%")
 
 st.divider()
@@ -124,33 +160,19 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# Historiek
 st.subheader("📜 Historiek")
-
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
-    
     for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-    
     df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
-    df = df.sort_values('Datum_dt', ascending=False).reset_index(drop=True)
-    
-    recent = df.head(15)
-    display_df = recent[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].copy()
-    display_df = display_df.rename(columns={'Oogst/dag': 'Oogst'})
-    
-    st.dataframe(
-        display_df.style.format({
-            'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'
-        }),
-        use_container_width=True,
-        height=400,
-        hide_index=True
-    )
+    df = df.sort_values('Datum_dt', ascending=False).head(15)
+    display_df = df[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].rename(columns={'Oogst/dag': 'Oogst'})
+    st.dataframe(display_df.style.format({'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'}), 
+                 use_container_width=True, height=380, hide_index=True)
 except:
-    pass
+    st.info("Historiek wordt geladen...")
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,

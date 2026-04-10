@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v2.3 - Exacte Sheet match
+# SOLAR PIEK PRO v2.4 - Ultra Robuust
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -43,7 +43,7 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
             "galvo": round(float(g), 1),
             "totaal": round(float(t), 1),
             "oogst": round(float(oogst), 2),
-            "start_kwh": round(float(start_kwh), 3) if start_kwh else None,
+            "start_kwh": round(float(start_kwh), 3) if start_kwh is not None else None,
             "actie": "update"
         }
         r = requests.post(WEBAPP_URL, json=payload, timeout=10)
@@ -123,22 +123,27 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# ====================== HISTORIEK ======================
+# ====================== HISTORIEK - Zeer robuust ======================
 st.subheader("📜 Historiek")
 
 try:
-    df = pd.read_csv(CSV_URL)
+    df = pd.read_csv(CSV_URL, header=0)
     
-    # Exacte kolomnamen uit jouw sheet
-    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh'][:len(df.columns)]
+    # Kolommen strippen en opschonen
+    df.columns = [col.strip() for col in df.columns]
     
-    # Datum omzetten voor correcte sortering
+    # Veiligste manier: kolommen hernoemen op basis van positie
+    expected_cols = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
+    df = df.iloc[:, :len(expected_cols)]  # alleen eerste 6 kolommen nemen
+    df.columns = expected_cols[:len(df.columns)]
+    
+    # Datum sorteren
     df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
-    df = df.sort_values('Datum_dt', ascending=False)   # Nieuwste bovenaan
+    df = df.sort_values('Datum_dt', ascending=False)
     
     recent = df.head(15).copy()
     
-    # Weergave
+    # Schoon display
     display_df = recent[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].copy()
     display_df = display_df.rename(columns={'Oogst/dag': 'Oogst'})
     
@@ -153,14 +158,15 @@ try:
         height=420,
         hide_index=True
     )
+
 except Exception as e:
     st.error("Probleem met laden van historiek")
-    st.info("Controleer de kolomnamen in je Google Sheet.")
+    st.info("Probeer de Sheet te downloaden als CSV en opnieuw te uploaden, of controleer of rij 1 exact de kolomnamen bevat.")
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
                        st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag):
-        st.success("✅ Succesvol opgeslagen!")
+        st.success("✅ Opgeslagen!")
         time.sleep(1)
         st.rerun()
 

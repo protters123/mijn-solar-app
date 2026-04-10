@@ -166,5 +166,5 @@ if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=Tr
         time.sleep(1)
         st.rerun()
 
-time.sleep(5)
+time.sleep(2)
 st.rerun()

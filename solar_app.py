@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v3.2 - Dynamische Weer Emoji's
+# SOLAR PIEK PRO v3.6 - Temperatuur fix (geen dubbele °C)
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -73,30 +73,22 @@ def get_weather():
         r = requests.get("https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
         
-        temp = parts[0].strip().replace("Â", "").replace("°", "") + "°C"
+        # Temperatuur fix - voorkom dubbele °C
+        temp_str = parts[0].strip().replace("Â", "").replace("°C", "").replace("°", "").strip()
+        temp = f"{temp_str}°C"
+        
         desc = parts[1].strip()
         hum = parts[2].strip().rstrip('%')
         
-        # Uitgebreide weer-emoji mapping
+        # Weer emoji
         d = desc.lower()
-        if any(x in d for x in ["zonnig", "helder", "zon"]):
-            icon = "☀️"
-        elif any(x in d for x in ["licht bewolkt", "meest zonnig"]):
-            icon = "⛅"
-        elif any(x in d for x in ["bewolkt", "overwegend bewolkt"]):
-            icon = "☁️"
-        elif any(x in d for x in ["regen", "buien", "neerslag"]):
-            icon = "🌧️"
-        elif "onweer" in d or "bliksem" in d:
-            icon = "⛈️"
-        elif any(x in d for x in ["sneeuw", "sneeuwbuien"]):
-            icon = "❄️"
-        elif "mist" in d or "nevel" in d:
-            icon = "🌫️"
-        elif "storm" in d or "wind" in d:
-            icon = "🌬️"
-        else:
-            icon = "🌤️"  # default
+        if any(x in d for x in ["zonnig", "helder", "zon"]): icon = "☀️"
+        elif any(x in d for x in ["licht bewolkt"]): icon = "⛅"
+        elif any(x in d for x in ["bewolkt"]): icon = "☁️"
+        elif any(x in d for x in ["regen", "buien"]): icon = "🌧️"
+        elif "onweer" in d: icon = "⛈️"
+        elif "mist" in d: icon = "🌫️"
+        else: icon = "🌤️"
         
         return temp, desc, hum, icon
     except:
@@ -130,10 +122,17 @@ st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum, weather_icon = get_weather()
 
-col1, col2, col3 = st.columns([1,2,1])
-with col1: st.metric("🌡️ Temperatuur", temp)
-with col2: st.markdown(f"**{weather_icon} {desc}**", unsafe_allow_html=True)
-with col3: st.metric("💧 Vochtigheid", f"{hum}%")
+col1, col2, col3 = st.columns([1, 1.2, 1])
+
+with col1:
+    st.metric("🌡️ Temperatuur", temp)
+
+with col2:
+    st.markdown(f"**{desc}**")
+    st.markdown(f"<div style='text-align: center; font-size: 4rem; margin-top: -8px;'>{weather_icon}</div>", unsafe_allow_html=True)
+
+with col3:
+    st.metric("💧 Vochtigheid", f"{hum}%")
 
 st.divider()
 
@@ -165,13 +164,6 @@ try:
                  use_container_width=True, height=380, hide_index=True)
 except:
     pass
-
-# Groot wolkje onderaan
-st.markdown("""
-    <div style='text-align: center; margin-top: 50px; opacity: 0.6;'>
-        <h1 style='font-size: 5rem; margin: 0;'>☁️</h1>
-    </div>
-""", unsafe_allow_html=True)
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,

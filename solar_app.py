@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v3.3 - Groot wolkje écht onderaan
+# SOLAR PIEK PRO v3.4 - Groot weer-icoon onder beschrijving
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,7 +24,7 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# ====================== SESSION STATE ======================
+# Session State + piek laden
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
     try:
         df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
@@ -78,8 +78,8 @@ def get_weather():
         
         d = desc.lower()
         if any(x in d for x in ["zonnig", "helder", "zon"]): icon = "☀️"
-        elif any(x in d for x in ["licht bewolkt", "meest zonnig"]): icon = "⛅"
-        elif any(x in d for x in ["bewolkt", "overwegend bewolkt"]): icon = "☁️"
+        elif any(x in d for x in ["licht bewolkt"]): icon = "⛅"
+        elif any(x in d for x in ["bewolkt"]): icon = "☁️"
         elif any(x in d for x in ["regen", "buien"]): icon = "🌧️"
         elif "onweer" in d: icon = "⛈️"
         elif "mist" in d: icon = "🌫️"
@@ -89,7 +89,7 @@ def get_weather():
     except:
         return "+11°C", "Bewolkt", "54", "☁️"
 
-# ====================== LIVE DATA ======================
+# Live data
 val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
@@ -107,8 +107,7 @@ if val_t > st.session_state.p_total_peak:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, val_t, oogst_vandaag, st.session_state.start_kwh_dag)
 
 if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
-    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
-                    st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
+    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
     st.session_state.laatste_opslag_datum = vandaag_iso
 
 # ====================== UI ======================
@@ -121,6 +120,13 @@ col1, col2, col3 = st.columns([1,2,1])
 with col1: st.metric("🌡️ Temperatuur", temp)
 with col2: st.markdown(f"**{weather_icon} {desc}**")
 with col3: st.metric("💧 Vochtigheid", f"{hum}%")
+
+# === GROOT WEER-ICOON DIRECT ONDER DE BESCHRIJVING ===
+st.markdown(f"""
+    <div style='text-align: center; margin: 10px 0 30px 0;'>
+        <span style='font-size: 6.5rem;'>{weather_icon}</span>
+    </div>
+""", unsafe_allow_html=True)
 
 st.divider()
 
@@ -152,14 +158,6 @@ try:
                  use_container_width=True, height=380, hide_index=True)
 except:
     pass
-
-# ==================== GROTE WOLKJE ONDERAAN (echt laatste element) ====================
-st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown("""
-    <div style='text-align: center; margin-top: 60px; margin-bottom: 30px; opacity: 0.65;'>
-        <h1 style='font-size: 6rem; margin: 0; line-height: 1;'>☁️</h1>
-    </div>
-""", unsafe_allow_html=True)
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,

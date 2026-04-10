@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v2.6 - Laatste Poging + Debug
+# SOLAR PIEK PRO v2.7 - Gefixt (string → numeric)
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -37,9 +37,15 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
     try:
-        payload = {"datum": vandaag_nl, "symo": round(float(s),1), "galvo": round(float(g),1),
-                   "totaal": round(float(t),1), "oogst": round(float(oogst),2),
-                   "start_kwh": round(float(start_kwh),3) if start_kwh else None, "actie": "update"}
+        payload = {
+            "datum": vandaag_nl,
+            "symo": round(float(s), 1),
+            "galvo": round(float(g), 1),
+            "totaal": round(float(t), 1),
+            "oogst": round(float(oogst), 2),
+            "start_kwh": round(float(start_kwh), 3) if start_kwh is not None else None,
+            "actie": "update"
+        }
         r = requests.post(WEBAPP_URL, json=payload, timeout=10)
         return r.status_code == 200
     except:
@@ -63,7 +69,7 @@ def get_weather():
     except:
         return "+11°C", "Bewolkt", "54%"
 
-# Live data
+# ====================== LIVE DATA ======================
 val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
@@ -81,7 +87,8 @@ if val_t > st.session_state.p_total_peak:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, val_t, oogst_vandaag, st.session_state.start_kwh_dag)
 
 if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
-    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
+    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
+                    st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
     st.session_state.laatste_opslag_datum = vandaag_iso
 
 # ====================== UI ======================
@@ -108,39 +115,41 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# ====================== HISTORIEK + DEBUG ======================
+# ====================== HISTORIEK ======================
 st.subheader("📜 Historiek")
 
 try:
-    df = pd.read_csv(CSV_URL, header=0, usecols=range(6))  # forceer eerste 6 kolommen
+    df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
+    
+    # === BELANGRIJKE FIX: strings omzetten naar cijfers ===
+    for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
     
     df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
     df = df.sort_values('Datum_dt', ascending=False).reset_index(drop=True)
     
-    recent = df.head(15)
+    recent = df.head(15).copy()
     
     display_df = recent[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].copy()
     display_df = display_df.rename(columns={'Oogst/dag': 'Oogst'})
     
     st.dataframe(
-        display_df.style.format({'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'}),
-        use_container_width=True, height=420, hide_index=True
+        display_df.style.format({
+            'Symo': '{:.0f}',
+            'Galvo': '{:.0f}',
+            'Totaal': '{:.0f}',
+            'Oogst': '{:.2f}'
+        }),
+        use_container_width=True,
+        height=420,
+        hide_index=True
     )
     st.success("✅ Historiek succesvol geladen")
 
 except Exception as e:
     st.error("Probleem met laden van historiek")
-    st.info("Foutmelding: " + str(e))
-    
-    # DEBUG INFO
-    st.subheader("🔧 Debug Info")
-    try:
-        raw = pd.read_csv(CSV_URL, header=0)
-        st.write("Kolommen in CSV:", list(raw.columns))
-        st.write("Eerste 2 rijen:", raw.head(2))
-    except Exception as debug_e:
-        st.write("Kon zelfs raw data niet lezen:", str(debug_e))
+    st.info(f"Fout: {e}")
 
 if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
     if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,

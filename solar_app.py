@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v4.6 - Oogst + StartKWh Fix
+# SOLAR PIEK PRO v4.6 - StartKWh + Oogst Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -33,24 +33,27 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
 
-# Laad data
+# Forceer laden van StartKWh en piek
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
+    
     vandaag = df[df['Datum'] == vandaag_nl]
     if not vandaag.empty:
+        # StartKWh laden
         start_series = pd.to_numeric(vandaag['StartKWh'], errors='coerce')
         if not start_series.dropna().empty:
             st.session_state.start_kwh_dag = start_series.dropna().iloc[-1]
         
+        # Piek laden
         vandaag['Totaal_num'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
         if not vandaag['Totaal_num'].isna().all():
             max_row = vandaag.loc[vandaag['Totaal_num'].idxmax()]
             st.session_state.p_symo_peak = float(max_row.get('Symo', 0))
             st.session_state.p_galvo_peak = float(max_row.get('Galvo', 0))
             st.session_state.p_total_peak = float(max_row.get('Totaal', 0))
-except:
-    pass
+except Exception as e:
+    st.warning(f"Laadfout: {e}")
 
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
@@ -61,7 +64,7 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
             "galvo": round(float(g), 1),
             "totaal": round(float(t), 1),
             "oogst": round(float(oogst), 2),
-            "start_kwh": round(float(start_kwh), 3) if start_kwh is not None else 0,
+            "start_kwh": round(float(start_kwh), 3) if start_kwh is not None else None,
             "actie": "update"
         }
         return requests.post(WEBAPP_URL, json=payload, timeout=10).status_code == 200
@@ -96,13 +99,15 @@ val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# Start kWh vastleggen + opslaan
+# Start kWh vastleggen als hij nog niet bestaat
 if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
-    sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)   # Forceer opslaan
+    sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None else 0.0
+# Oogst berekenen
+oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None and kwh_s is not None and kwh_g is not None else 0.0
 
+# Piek bijwerken
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)

@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v4.2 - Finale Fix
+# SOLAR PIEK PRO v4.3 - Oogst FIX (laatste versie)
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -33,15 +33,17 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
 
-# Laad data uit Sheet
+# Laad start_kwh en piek
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
     vandaag = df[df['Datum'] == vandaag_nl]
     if not vandaag.empty:
-        # Start kWh
-        start_val = vandaag['StartKWh'].dropna().iloc[-1] if not vandaag['StartKWh'].dropna().empty else None
-        st.session_state.start_kwh_dag = float(start_val) if start_val is not None else None
+        # Start kWh (meest recente niet-lege waarde)
+        start_series = pd.to_numeric(vandaag['StartKWh'], errors='coerce')
+        valid_start = start_series.dropna()
+        if not valid_start.empty:
+            st.session_state.start_kwh_dag = valid_start.iloc[-1]
         
         # Piek
         vandaag['Totaal_num'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
@@ -97,22 +99,20 @@ val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
+# Start kWh vastleggen
 if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
     sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None else 0.0
+# Oogst berekenen
+oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None and kwh_s is not None and kwh_g is not None else 0.0
 
+# Piek bijwerken
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, val_t, oogst_vandaag, st.session_state.start_kwh_dag)
-
-# Avond opslag
-if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
-    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
-    st.session_state.laatste_opslag_datum = vandaag_iso
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
@@ -144,7 +144,6 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# Historiek
 st.subheader("📜 Historiek")
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
@@ -161,7 +160,7 @@ except:
 
 if st.button("🔄 Reset Oogst vandaag", type="secondary"):
     st.session_state.start_kwh_dag = None
-    st.success("Startwaarde gereset. Refresh de pagina.")
+    st.success("Startwaarde gereset → refresh de pagina")
     time.sleep(1)
     st.rerun()
 

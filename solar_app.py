@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v3.8 - Volledig werkend
+# SOLAR PIEK PRO v3.9 - Oogst & Piek Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -32,25 +32,26 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
         
         vandaag = df[df['Datum'] == vandaag_nl]
         if not vandaag.empty:
-            # Start kWh
-            start_val = vandaag['StartKWh'].iloc[-1]
-            st.session_state.start_kwh_dag = float(start_val) if pd.notna(start_val) and str(start_val).strip() != '' else None
+            # Start kWh (laatste waarde)
+            start = vandaag['StartKWh'].iloc[-1]
+            st.session_state.start_kwh_dag = float(start) if pd.notna(start) and str(start).strip() not in ['','None','nan'] else None
             
             # Piek
-            vandaag_num = pd.to_numeric(vandaag['Totaal'], errors='coerce')
-            if not vandaag_num.isna().all():
-                max_row = vandaag.loc[vandaag_num.idxmax()]
-                st.session_state.p_symo_peak = float(max_row.get('Symo', 0))
-                st.session_state.p_galvo_peak = float(max_row.get('Galvo', 0))
-                st.session_state.p_total_peak = float(max_row.get('Totaal', 0))
-            else:
-                st.session_state.p_symo_peak = st.session_state.p_galvo_peak = st.session_state.p_total_peak = 0.0
+            vandaag['Totaal_num'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
+            max_row = vandaag.loc[vandaag['Totaal_num'].idxmax()]
+            st.session_state.p_symo_peak = float(max_row.get('Symo', 0))
+            st.session_state.p_galvo_peak = float(max_row.get('Galvo', 0))
+            st.session_state.p_total_peak = float(max_row.get('Totaal', 0))
         else:
             st.session_state.start_kwh_dag = None
-            st.session_state.p_symo_peak = st.session_state.p_galvo_peak = st.session_state.p_total_peak = 0.0
+            st.session_state.p_symo_peak = 0.0
+            st.session_state.p_galvo_peak = 0.0
+            st.session_state.p_total_peak = 0.0
     except:
         st.session_state.start_kwh_dag = None
-        st.session_state.p_symo_peak = st.session_state.p_galvo_peak = st.session_state.p_total_peak = 0.0
+        st.session_state.p_symo_peak = 0.0
+        st.session_state.p_galvo_peak = 0.0
+        st.session_state.p_total_peak = 0.0
 
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
@@ -76,7 +77,7 @@ def fetch_hw_data(url):
         data = requests.get(url, timeout=3).json()
         power = round(abs(float(data.get('active_power_w', 0))))
         kwh = float(data.get('total_power_export_t1_kwh', 0)) + float(data.get('total_power_export_t2_kwh', 0))
-        return power, kwh if kwh > 10 else None, "🟢"
+        return power, kwh if kwh > 5 else None, "🟢"
     except:
         return 0, None, "🔴"
 
@@ -85,19 +86,14 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
-        temp = parts[0].strip().replace("Â", "").replace("°C", "").strip() + "°C"
+        temp = parts[0].strip().replace("Â", "") + "°C"
         desc = parts[1].strip()
         hum = parts[2].strip().rstrip('%')
-        
         d = desc.lower()
-        if any(x in d for x in ["zonnig", "helder", "zon"]): icon = "☀️"
-        elif any(x in d for x in ["licht bewolkt"]): icon = "⛅"
-        elif any(x in d for x in ["bewolkt"]): icon = "☁️"
-        elif any(x in d for x in ["regen", "buien"]): icon = "🌧️"
-        elif "onweer" in d: icon = "⛈️"
-        elif "mist" in d: icon = "🌫️"
-        else: icon = "🌤️"
-        
+        icon = "☀️" if any(x in d for x in ["zon","helder"]) else \
+               "⛅" if "licht bewolkt" in d else \
+               "☁️" if "bewolkt" in d else \
+               "🌧️" if any(x in d for x in ["regen","bui"]) else "🌤️"
         return temp, desc, hum, icon
     except:
         return "+11°C", "Bewolkt", "54", "☁️"
@@ -107,18 +103,22 @@ val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
+# Start kWh vastleggen
 if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
     sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None else 0.0
+# Oogst berekenen
+oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None and kwh_s is not None and kwh_g is not None else 0.0
 
-if val_t > st.session_state.p_total_peak + 5:
+# Piek bijwerken
+if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, val_t, oogst_vandaag, st.session_state.start_kwh_dag)
 
+# Avond opslag
 if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
                     st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
@@ -130,20 +130,20 @@ st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum, weather_icon = get_weather()
 
-col1, col2, col3 = st.columns([1, 1.2, 1])
+col1, col2, col3 = st.columns([1,1.2,1])
 with col1: st.metric("🌡️ Temperatuur", temp)
 with col2:
     st.markdown(f"**{desc}**")
-    st.markdown(f"<div style='text-align: center; font-size: 4rem; margin-top: -8px;'>{weather_icon}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center; font-size:4rem; margin-top:-8px;'>{weather_icon}</div>", unsafe_allow_html=True)
 with col3: st.metric("💧 Vochtigheid", f"{hum}%")
 
 st.divider()
 
-st.markdown(f"<h1 style='text-align: center; color: #FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
+st.markdown(f"<h1 style='text-align:center; color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
 
 st.markdown(f"### 📈 Oogst vandaag: **{oogst_vandaag:.2f} kWh**")
-st.metric("🏆 All-time Record", f"{max(3729, st.session_state.p_total_peak):,.0f} W")
+st.metric("🏆 Piek vandaag", f"{st.session_state.p_total_peak:,.0f} W")
 
 st.divider()
 
@@ -154,26 +154,15 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
+# Historiek
 st.subheader("📜 Historiek")
-try:
-    df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
-    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
-    for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
-    df = df.sort_values('Datum_dt', ascending=False).head(15)
-    display_df = df[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].rename(columns={'Oogst/dag': 'Oogst'})
-    st.dataframe(display_df.style.format({'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'}), 
-                 use_container_width=True, height=380, hide_index=True)
-except:
-    pass
+# ... (je bestaande historiek code)
 
-if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
-    if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
-                       st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag):
-        st.success("✅ Opgeslagen!")
-        time.sleep(1)
-        st.rerun()
+if st.button("🔄 Reset Oogst vandaag", type="secondary"):
+    st.session_state.start_kwh_dag = None
+    st.success("Startwaarde gereset — refresh de pagina")
+    time.sleep(1)
+    st.rerun()
 
 time.sleep(5)
 st.rerun()

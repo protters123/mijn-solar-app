@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v4.1 - Oogst + Piek FIX
+# SOLAR PIEK PRO v4.2 - Finale Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -33,16 +33,16 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
 
-# Laad start_kwh en piek uit Sheet
+# Laad data uit Sheet
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
     vandaag = df[df['Datum'] == vandaag_nl]
     if not vandaag.empty:
         # Start kWh
-        start = vandaag['StartKWh'].dropna().iloc[-1] if not vandaag['StartKWh'].dropna().empty else None
-        if start is not None:
-            st.session_state.start_kwh_dag = float(start)
+        start_val = vandaag['StartKWh'].dropna().iloc[-1] if not vandaag['StartKWh'].dropna().empty else None
+        st.session_state.start_kwh_dag = float(start_val) if start_val is not None else None
+        
         # Piek
         vandaag['Totaal_num'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
         if not vandaag['Totaal_num'].isna().all():
@@ -58,11 +58,11 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
     try:
         payload = {
             "datum": vandaag_nl,
-            "symo": round(float(s),1),
-            "galvo": round(float(g),1),
-            "totaal": round(float(t),1),
-            "oogst": round(float(oogst),2),
-            "start_kwh": round(float(start_kwh),3) if start_kwh is not None else None,
+            "symo": round(float(s), 1),
+            "galvo": round(float(g), 1),
+            "totaal": round(float(t), 1),
+            "oogst": round(float(oogst), 2),
+            "start_kwh": round(float(start_kwh), 3) if start_kwh is not None else None,
             "actie": "update"
         }
         return requests.post(WEBAPP_URL, json=payload, timeout=10).status_code == 200
@@ -97,20 +97,22 @@ val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# Start kWh vastleggen
 if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
     sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-# Oogst berekenen
 oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None else 0.0
 
-# Piek bijwerken
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, val_t, oogst_vandaag, st.session_state.start_kwh_dag)
+
+# Avond opslag
+if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
+    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
+    st.session_state.laatste_opslag_datum = vandaag_iso
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
@@ -122,7 +124,7 @@ col1, col2, col3 = st.columns([1,1.2,1])
 with col1: st.metric("🌡️ Temperatuur", temp)
 with col2:
     st.markdown(f"**{desc}**")
-    st.markdown(f"<div style='text-align:center; font-size:4rem; margin-top:-8px;'>{weather_icon}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center;font-size:4rem;margin-top:-8px;'>{weather_icon}</div>", unsafe_allow_html=True)
 with col3: st.metric("💧 Vochtigheid", f"{hum}%")
 
 st.divider()
@@ -142,9 +144,24 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
+# Historiek
+st.subheader("📜 Historiek")
+try:
+    df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
+    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
+    for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
+    df = df.sort_values('Datum_dt', ascending=False).head(15)
+    display_df = df[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].rename(columns={'Oogst/dag': 'Oogst'})
+    st.dataframe(display_df.style.format({'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'}), 
+                 use_container_width=True, height=380, hide_index=True)
+except:
+    st.info("Historiek kan niet worden geladen")
+
 if st.button("🔄 Reset Oogst vandaag", type="secondary"):
     st.session_state.start_kwh_dag = None
-    st.success("Startwaarde gereset → refresh de pagina")
+    st.success("Startwaarde gereset. Refresh de pagina.")
     time.sleep(1)
     st.rerun()
 

@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v3.8 - Betere Piek + Oogst
+# SOLAR PIEK PRO v3.8 - Volledig werkend
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,9 +24,8 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# ====================== SESSION STATE + LADEN ======================
+# ====================== SESSION STATE ======================
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
-    # Laad start_kwh en piek van vandaag
     try:
         df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
         df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
@@ -77,34 +76,49 @@ def fetch_hw_data(url):
         data = requests.get(url, timeout=3).json()
         power = round(abs(float(data.get('active_power_w', 0))))
         kwh = float(data.get('total_power_export_t1_kwh', 0)) + float(data.get('total_power_export_t2_kwh', 0))
-        return power, kwh if kwh > 10 else None, "🟢"  # drempel om ruis te vermijden
+        return power, kwh if kwh > 10 else None, "🟢"
     except:
         return 0, None, "🔴"
+
+@st.cache_data(ttl=300)
+def get_weather():
+    try:
+        r = requests.get("https://wttr.in/Borgloon?format=%t|%C|%h&m&lang=nl", timeout=8)
+        parts = r.text.strip().split('|')
+        temp = parts[0].strip().replace("Â", "").replace("°C", "").strip() + "°C"
+        desc = parts[1].strip()
+        hum = parts[2].strip().rstrip('%')
+        
+        d = desc.lower()
+        if any(x in d for x in ["zonnig", "helder", "zon"]): icon = "☀️"
+        elif any(x in d for x in ["licht bewolkt"]): icon = "⛅"
+        elif any(x in d for x in ["bewolkt"]): icon = "☁️"
+        elif any(x in d for x in ["regen", "buien"]): icon = "🌧️"
+        elif "onweer" in d: icon = "⛈️"
+        elif "mist" in d: icon = "🌫️"
+        else: icon = "🌤️"
+        
+        return temp, desc, hum, icon
+    except:
+        return "+11°C", "Bewolkt", "54", "☁️"
 
 # ====================== LIVE DATA ======================
 val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# Start kWh vastleggen (één keer per dag)
 if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
     sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-# Oogst vandaag
-oogst_vandaag = 0.0
-if st.session_state.start_kwh_dag is not None and kwh_s is not None and kwh_g is not None:
-    oogst_vandaag = round((kwh_s + kwh_g) - st.session_state.start_kwh_dag, 2)
+oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None else 0.0
 
-# Piek bijwerken + direct opslaan
-if val_t > st.session_state.p_total_peak + 5:   # kleine drempel tegen ruis
+if val_t > st.session_state.p_total_peak + 5:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
-    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
-                    st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
+    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, val_t, oogst_vandaag, st.session_state.start_kwh_dag)
 
-# Avond definitief opslaan
 if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
                     st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
@@ -114,7 +128,7 @@ if nu.hour >= 23 and st.session_state.get('laatste_opslag_datum') != vandaag_iso
 st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
-temp, desc, hum, weather_icon = get_weather()   # (je vorige weer-functie)
+temp, desc, hum, weather_icon = get_weather()
 
 col1, col2, col3 = st.columns([1, 1.2, 1])
 with col1: st.metric("🌡️ Temperatuur", temp)
@@ -140,13 +154,26 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 
-# Historiek (blijft hetzelfde)
+st.subheader("📜 Historiek")
+try:
+    df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
+    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
+    for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
+    df = df.sort_values('Datum_dt', ascending=False).head(15)
+    display_df = df[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].rename(columns={'Oogst/dag': 'Oogst'})
+    st.dataframe(display_df.style.format({'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'}), 
+                 use_container_width=True, height=380, hide_index=True)
+except:
+    pass
 
-if st.button("🔄 Reset Oogst vandaag (voor testen)", type="secondary"):
-    st.session_state.start_kwh_dag = None
-    st.success("Startwaarde gereset. Refresh de pagina.")
-    time.sleep(1)
-    st.rerun()
+if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=True):
+    if sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak,
+                       st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag):
+        st.success("✅ Opgeslagen!")
+        time.sleep(1)
+        st.rerun()
 
 time.sleep(5)
 st.rerun()

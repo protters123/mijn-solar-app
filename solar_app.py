@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v4.3 - Oogst FIX (laatste versie)
+# SOLAR PIEK PRO v4.4 - Oogst FIX (sterk verbeterd)
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -33,17 +33,17 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
 
-# Laad start_kwh en piek
+# Laad start_kwh en piek uit Sheet
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
     vandaag = df[df['Datum'] == vandaag_nl]
     if not vandaag.empty:
-        # Start kWh (meest recente niet-lege waarde)
+        # Start kWh (meest recente geldige waarde)
         start_series = pd.to_numeric(vandaag['StartKWh'], errors='coerce')
-        valid_start = start_series.dropna()
-        if not valid_start.empty:
-            st.session_state.start_kwh_dag = valid_start.iloc[-1]
+        valid_starts = start_series.dropna()
+        if not valid_starts.empty:
+            st.session_state.start_kwh_dag = valid_starts.iloc[-1]
         
         # Piek
         vandaag['Totaal_num'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
@@ -52,8 +52,8 @@ try:
             st.session_state.p_symo_peak = float(max_row.get('Symo', 0))
             st.session_state.p_galvo_peak = float(max_row.get('Galvo', 0))
             st.session_state.p_total_peak = float(max_row.get('Totaal', 0))
-except:
-    pass
+except Exception as e:
+    st.error(f"Laadfout: {e}")
 
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
@@ -156,11 +156,11 @@ try:
     st.dataframe(display_df.style.format({'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'}), 
                  use_container_width=True, height=380, hide_index=True)
 except:
-    st.info("Historiek kan niet worden geladen")
+    st.info("Historiek laden mislukt")
 
 if st.button("🔄 Reset Oogst vandaag", type="secondary"):
     st.session_state.start_kwh_dag = None
-    st.success("Startwaarde gereset → refresh de pagina")
+    st.success("Startwaarde gereset. Refresh de pagina.")
     time.sleep(1)
     st.rerun()
 

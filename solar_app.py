@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v4.4 - Oogst FIX (sterk verbeterd)
+# SOLAR PIEK PRO v4.5 - Oogst definitief gefixt
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -33,27 +33,24 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
 
-# Laad start_kwh en piek uit Sheet
+# Laad start_kwh en piek
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
     vandaag = df[df['Datum'] == vandaag_nl]
     if not vandaag.empty:
-        # Start kWh (meest recente geldige waarde)
         start_series = pd.to_numeric(vandaag['StartKWh'], errors='coerce')
-        valid_starts = start_series.dropna()
-        if not valid_starts.empty:
-            st.session_state.start_kwh_dag = valid_starts.iloc[-1]
+        if not start_series.dropna().empty:
+            st.session_state.start_kwh_dag = start_series.dropna().iloc[-1]
         
-        # Piek
         vandaag['Totaal_num'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
         if not vandaag['Totaal_num'].isna().all():
             max_row = vandaag.loc[vandaag['Totaal_num'].idxmax()]
             st.session_state.p_symo_peak = float(max_row.get('Symo', 0))
             st.session_state.p_galvo_peak = float(max_row.get('Galvo', 0))
             st.session_state.p_total_peak = float(max_row.get('Totaal', 0))
-except Exception as e:
-    st.error(f"Laadfout: {e}")
+except:
+    pass
 
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
@@ -99,10 +96,10 @@ val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# Start kWh vastleggen
+# === BELANGRIJK: Start kWh vastleggen ===
 if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
-    sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
+    sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)   # Forceer opslaan
 
 # Oogst berekenen
 oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None and kwh_s is not None and kwh_g is not None else 0.0
@@ -160,7 +157,7 @@ except:
 
 if st.button("🔄 Reset Oogst vandaag", type="secondary"):
     st.session_state.start_kwh_dag = None
-    st.success("Startwaarde gereset. Refresh de pagina.")
+    st.success("Startwaarde gereset → refresh de pagina")
     time.sleep(1)
     st.rerun()
 

@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v4.8 - All-time Record uit hele Sheet
+# SOLAR PIEK PRO v4.9 - TypeError + Oogst Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -33,16 +33,10 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
 
-# Laad piek van vandaag + All-time Record uit hele Sheet
+# Laad data uit Sheet
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
-    
-    # All-time Record (hoogste Totaal ooit)
-    df['Totaal_num'] = pd.to_numeric(df['Totaal'], errors='coerce')
-    all_time_max = df['Totaal_num'].max()
-    
-    # Data van vandaag
     vandaag = df[df['Datum'] == vandaag_nl]
     if not vandaag.empty:
         start_series = pd.to_numeric(vandaag['StartKWh'], errors='coerce')
@@ -56,7 +50,7 @@ try:
             st.session_state.p_galvo_peak = float(max_row.get('Galvo', 0))
             st.session_state.p_total_peak = float(max_row.get('Totaal', 0))
 except:
-    all_time_max = 3729.0
+    pass
 
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh=None):
@@ -102,12 +96,18 @@ val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
+# Start kWh vastleggen
 if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
     sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-oogst_vandaag = round((kwh_s + kwh_g - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag is not None else 0.0
+# Oogst veilig berekenen
+oogst_vandaag = 0.0
+if (st.session_state.start_kwh_dag is not None and 
+    kwh_s is not None and kwh_g is not None):
+    oogst_vandaag = round(kwh_s + kwh_g - st.session_state.start_kwh_dag, 2)
 
+# Piek bijwerken
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
@@ -133,7 +133,7 @@ st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt
 st.progress(min(val_t / 8000, 1.0))
 
 st.markdown(f"### 📈 Oogst vandaag: **{oogst_vandaag:.2f} kWh**")
-st.metric("🏆 All-time Record", f"{max(all_time_max, st.session_state.p_total_peak):,.0f} W")
+st.metric("🏆 Piek vandaag", f"{st.session_state.p_total_peak:,.0f} W")
 
 st.divider()
 

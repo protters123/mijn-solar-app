@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v3.8 - Oogst vandaag FIX (verbeterd)
+# SOLAR PIEK PRO v3.9 - Offline inverters fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -81,7 +81,7 @@ def fetch_hw_data(url):
         status = "🟢" if kwh > 0 else "🔴"
         return power, kwh if kwh > 0 else None, status
     except Exception as e:
-        st.warning(f"API fout bij {url}: {e}")
+        # st.warning(f"API fout bij {url}: {e}")
         return 0, None, "🔴"
 
 @st.cache_data(ttl=300)
@@ -103,21 +103,31 @@ def get_weather():
         return "+11°C", "Bewolkt", "54", "☁️"
 
 # ====================== LIVE DATA ======================
-val_s, kwh_s, status_s = fetch_hw_data(URL_1)
-val_g, kwh_g, status_g = fetch_hw_data(URL_2)
+val_s, kwh_s_raw, status_s = fetch_hw_data(URL_1)
+val_g, kwh_g_raw, status_g = fetch_hw_data(URL_2)
+
+# Behandel offline als 0 voor berekeningen
+kwh_s = kwh_s_raw if kwh_s_raw is not None else 0.0
+kwh_g = kwh_g_raw if kwh_g_raw is not None else 0.0
 val_t = val_s + val_g
 
-# Start kWh vastleggen (ochtend) met debug
-if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
-    st.session_state.start_kwh_dag = round(kwh_s + kwh_g, 3)  # Meer precisie
+# Waarschuwing voor offline inverters
+if status_s == "🔴":
+    st.warning("Symo inverter offline – waarden als 0 behandeld.")
+if status_g == "🔴":
+    st.warning("Galvo inverter offline – waarden als 0 behandeld (verwacht na installatie).")
+
+# Start kWh vastleggen (sta toe als ten minste één inverter data heeft)
+if st.session_state.start_kwh_dag is None and (kwh_s_raw is not None or kwh_g_raw is not None):
+    st.session_state.start_kwh_dag = round(kwh_s + kwh_g, 3)  # Meer precisie, gebruik behandelde waarden
     if sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag):
         st.session_state.debug_log = "Start_kwh gezet en opgeslagen."
     else:
         st.session_state.debug_log = "Start_kwh gezet, maar opslag faalde."
 
-# Oogst vandaag berekenen met precisie
+# Oogst vandaag berekenen met precisie (gebruik behandelde waarden)
 oogst_vandaag = 0.0
-if st.session_state.start_kwh_dag is not None and kwh_s is not None and kwh_g is not None:
+if st.session_state.start_kwh_dag is not None:
     raw_oogst = (kwh_s + kwh_g) - st.session_state.start_kwh_dag
     oogst_vandaag = max(round(raw_oogst, 2), 0.0)  # Voorkom negatief, rond naar 2 decimalen
 
@@ -165,12 +175,15 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 st.divider()
 
 st.subheader("📜 Historiek")
-# Laad en toon laatste 10 dagen uit Sheet (eenvoudige tabel)
+# Laad en toon laatste 10 dagen uit Sheet (gesorteerd op datum, nieuwste bovenaan)
 try:
     df_hist = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df_hist.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
-    df_hist = df_hist.tail(10)  # Laatste 10 rijen
-    st.dataframe(df_hist)
+    df_hist = df_hist.sort_index(ascending=False).head(10)  # Nieuwste bovenaan, max 10
+    if df_hist.empty:
+        st.info("Geen historische data beschikbaar.")
+    else:
+        st.dataframe(df_hist)
 except Exception as e:
     st.error(f"Fout bij laden historiek: {e}")
 
@@ -180,6 +193,8 @@ if st.button("💾 Nu handmatig opslaan", type="primary", use_container_width=Tr
         st.success("✅ Opgeslagen!")
         time.sleep(1)
         st.rerun()
+    else:
+        st.error("❌ Opslag mislukt – controleer verbinding of Sheet.")
 
 # ====================== DEBUG SECTIE (tijdelijk voor troubleshooting) ======================
 if 'show_debug' not in st.session_state:
@@ -190,8 +205,8 @@ if st.button("Toggle Debug Info"):
 
 if st.session_state.show_debug:
     st.subheader("Debug Info")
-    st.write(f"kwh_s: {kwh_s}, kwh_g: {kwh_g}, start_kwh_dag: {st.session_state.start_kwh_dag}")
-    st.write(f"Raw oogst calc: {(kwh_s + kwh_g) - st.session_state.start_kwh_dag if kwh_s and kwh_g and st.session_state.start_kwh_dag else 'Niet berekend'}")
+    st.write(f"kwh_s: {kwh_s} ({'raw: ' + str(kwh_s_raw) if kwh_s_raw is None else 'OK'}), kwh_g: {kwh_g} ({'raw: ' + str(kwh_g_raw) if kwh_g_raw is None else 'OK'}), start_kwh_dag: {st.session_state.start_kwh_dag}")
+    st.write(f"Raw oogst calc: {(kwh_s + kwh_g) - st.session_state.start_kwh_dag if st.session_state.start_kwh_dag is not None else 'Niet berekend (start_kwh ontbreekt)'}")
     st.write(f"Oogst vandaag (afgerond): {oogst_vandaag}")
     st.write(f"Debug log: {st.session_state.get('debug_log', 'Geen logs')}")
     st.write(f"API Status: Symo {status_s}, Galvo {status_g}")

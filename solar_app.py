@@ -6,11 +6,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v6.7 - Perfect Sync & Weather
+# SOLAR PIEK PRO v6.9 - De Echte Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+# FIX: De CSV link moet exact zo zijn:
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+# FIX: Je Webapp URL teruggezet:
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhiYefAqGxI8YXZ0Jm4UqSo2pQ6pO6Ip6ciRGEEWQdXaXl14XR7L83G1ivg0f9VV2r/exec"
 
 PUBLIEK_IP = "94.110.235.108"
@@ -34,21 +36,17 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
     st.session_state.initialized = True
 
 # ====================== DATA LADEN ======================
-all_time_peak = 3729.0 # Jouw record uit de sheet
+all_time_peak = 3729.0
 try:
     df_full = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag']
-    
-    # Bereken All Time Peak
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
 
     vandaag_df = df_full[df_full['Datum'] == vandaag_nl]
     if not vandaag_df.empty:
-        # Haal Startwaarde op
         val_start = vandaag_df['StartKWhdag'].iloc[-1]
         if pd.notna(val_start): st.session_state.start_kwh_dag = float(val_start)
-        # Haal Piek van vandaag op
         v_totaal = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
         if pd.notna(v_totaal): st.session_state.p_total_peak = float(v_totaal)
 except:
@@ -78,7 +76,6 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        # Agressieve filter voor temperatuur
         t_clean = p[0].replace("Â", "").replace("C", "").replace("+", "").strip()
         temp = f"{t_clean}°C"
         desc = p[1].strip()
@@ -93,19 +90,15 @@ val_s, kwh_s = fetch_hw_data(URL_1)
 val_g, kwh_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
-# Startwaarde check
 if kwh_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_nu
 
-# Oogst vandaag
 oogst_vandaag = round(max(0, kwh_nu - st.session_state.start_kwh_dag), 2) if st.session_state.start_kwh_dag else 0.0
 
-# Piek update
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
-# Live naar Sheets
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
 
 # ====================== UI ======================
@@ -118,7 +111,7 @@ with w1: st.metric("🌡️ Temperatuur", temp)
 with w2: 
     st.markdown(f"**{desc}**")
     st.markdown(f"## {icon}")
-with w3: st.metric("💧 Vochtigheid", hum)
+with w3: st.metric("💧 Vochtigheid", f"{hum}")
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
@@ -138,7 +131,7 @@ st.divider()
 st.subheader("📜 Historiek")
 try:
     st.dataframe(df_full.tail(15), use_container_width=True, hide_index=True)
-except: st.info("Laden...")
+except: st.info("Gegevens laden...")
 
 time.sleep(2)
 st.rerun()

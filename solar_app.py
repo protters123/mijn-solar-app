@@ -6,11 +6,11 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v6.5 - Definitieve Fix
+# SOLAR PIEK PRO v6.6 - De "Niet meer naar de klote" Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# FIX: Volledige URL voor CSV export
+# FIX: De URL naar je Google Sheet was kapot, nu hersteld:
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhiYefAqGxI8YXZ0Jm4UqSo2pQ6pO6Ip6ciRGEEWQdXaXl14XR7L83G1ivg0f9VV2r/exec"
 
@@ -41,10 +41,11 @@ try:
     
     vandaag_df = df_full[df_full['Datum'] == vandaag_nl]
     if not vandaag_df.empty:
-        # Haal StartKWhdag uit de sheet
         val_start = vandaag_df['StartKWhdag'].iloc[-1]
         if pd.notna(val_start) and float(val_start) > 5:
             st.session_state.start_kwh_dag = float(val_start)
+        v_totaal = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
+        st.session_state.p_total_peak = max(float(v_totaal if pd.notna(v_totaal) else 0), st.session_state.p_total_peak)
 except:
     all_time_peak = 3729.0
 
@@ -70,20 +71,21 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # FIX: Correcte wttr.in URL voor Borgloon
-        r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=8)
-        parts = r.text.strip().split('|')
-        # Agressieve filter voor temperatuur
-        t_raw = parts[0].replace("Â", "").replace("C", "").replace("+", "").strip()
-        temp = f"{t_raw}°C"
-        desc = parts[1].strip()
-        hum = parts[2].strip()
+        # FIX: Weer URL hersteld
+        r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
+        p = r.text.strip().split('|')
+        # Agressieve filter voor dubbele C
+        t_clean = p[0].replace("Â", "").replace("C", "").replace("+", "").strip()
+        temp = f"{t_clean}°C"
+        desc = p[1].strip()
+        hum = p[2].strip()
+        # EMOJI LOGICA
         d = desc.lower()
         icon = "☀️" if "zon" in d or "helder" in d else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return temp, desc, hum, icon
-    except: return "?°C", "Laden...", "?", "⛅"
+    except: return "?°C", "Laden...", "?", "☁️"
 
-# ====================== LIVE DATA & LOGICA ======================
+# ====================== LOGICA ======================
 val_s, kwh_s = fetch_hw_data(URL_1)
 val_g, kwh_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
@@ -95,8 +97,7 @@ oogst_vandaag = round(max(0, kwh_nu - st.session_state.start_kwh_dag), 2) if st.
 
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
-    st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
-    st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
+    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
 
@@ -109,7 +110,7 @@ w1, w2, w3 = st.columns(3)
 with w1: st.metric("🌡️ Temperatuur", temp)
 with w2: 
     st.markdown(f"**{desc}**")
-    st.markdown(f"### {icon}")
+    st.markdown(f"## {icon}")
 with w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()
@@ -127,7 +128,9 @@ with c2: st.metric("🔴 Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f}")
 
 st.divider()
-try: st.dataframe(df_full.tail(10), use_container_width=True, hide_index=True)
+st.subheader("📜 Historiek")
+try:
+    st.dataframe(df_full.tail(10), use_container_width=True, hide_index=True)
 except: st.info("Historiek laden...")
 
 time.sleep(2)

@@ -11,7 +11,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwgg4O2ZnqVV4KVGPWq5aCigiDQnkeEt1ZQqoUee3Ib0q4gF1vA6bcqQ0lzcrofDf_o/exec"
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxZ_cOloEY5eA5zvHhfZfbvgARkMa3O59-AniXHpJ1hsUAo2hnguNx5BBFldnX5RacV/exec"
 
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"

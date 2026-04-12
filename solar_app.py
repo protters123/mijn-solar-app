@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v10.5 - FIXED PEAK SYNC
+# SOLAR PIEK PRO v10.6 - WEER HERSTELD + SYNC
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -54,23 +54,15 @@ if df_raw is not None:
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
-        # SYNC MET SHEET DATA VAN VANDAAG
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
-            # Neem de hoogste waarde uit 'Totaal' kolom (1808)
             sheet_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
-            
-            # Dwing deze waarde af op Symo en Totaal als ze in de app nog lager staan
             if sheet_piek > 10:
-                if sheet_piek > st.session_state.p_total_peak:
-                    st.session_state.p_total_peak = sheet_piek
-                if sheet_piek > st.session_state.p_symo_peak:
-                    st.session_state.p_symo_peak = sheet_piek
+                if sheet_piek > st.session_state.p_total_peak: st.session_state.p_total_peak = sheet_piek
+                if sheet_piek > st.session_state.p_symo_peak: st.session_state.p_symo_peak = sheet_piek
             
-            # Sync Startwaarde
             sheet_start = pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce').iloc[0]
-            if sheet_start > 1000:
-                st.session_state.start_kwh_dag = float(sheet_start)
+            if sheet_start > 1000: st.session_state.start_kwh_dag = float(sheet_start)
         
         df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
@@ -98,6 +90,17 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh, kwh_nu, force=False):
             st.session_state.last_sheet_update = nu_ts
         except: pass
 
+@st.cache_data(ttl=600)
+def get_weather():
+    try:
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
+        p = r.text.strip().split('|')
+        temp, desc, hum = p[0].replace("+",""), p[1], p[2]
+        d = desc.lower()
+        icon = "☀️" if "zon" in d or "helder" in d else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
+        return temp, desc, hum, icon
+    except: return "12°C", "Licht bewolkt", "80%", "⛅"
+
 # ====================== LIVE DATA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
@@ -108,15 +111,10 @@ if st.session_state.start_kwh_dag is None and kwh_nu > 0:
 
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
-# Update live pieken
-if val_s > st.session_state.p_symo_peak:
-    st.session_state.p_symo_peak = val_s
-if val_g > st.session_state.p_galvo_peak:
-    st.session_state.p_galvo_peak = val_g
-if val_t > st.session_state.p_total_peak:
-    st.session_state.p_total_peak = val_t
+if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
+if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
+if val_t > st.session_state.p_total_peak: st.session_state.p_total_peak = val_t
 
-# Sync naar Sheets
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
@@ -124,8 +122,14 @@ if st.session_state.start_kwh_dag:
 st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M:%S')}")
 
+# WEER SECTIE HERSTELD
+temp, desc, hum, icon = get_weather()
+w1, w2, w3 = st.columns(3)
+with w1: st.metric("🌡️ Temperatuur", temp)
+with w2: st.markdown(f"**{desc}**\n### {icon}")
+with w3: st.metric("💧 Vochtigheid", hum)
+
 st.divider()
-# De live wattage uit je screenshot (1469 Watt)
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
 
@@ -135,7 +139,6 @@ with cb: st.metric("🏆 All Time Peak", f"{max(all_time_peak, st.session_state.
 
 st.divider()
 c1, c2, c3 = st.columns(3)
-# Hier zal nu "Piek: 1808 W" staan voor zowel Symo als Totaal
 with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")

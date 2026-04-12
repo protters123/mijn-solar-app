@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v5.7 - Weather & Sync Fix
+# SOLAR PIEK PRO v5.8 - StartKWh & Weather Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -42,9 +42,8 @@ try:
 
     vandaag = df_full[df_full['Datum'] == vandaag_nl]
     if not vandaag.empty:
-        # Altijd de meest recente startwaarde uit de sheet halen
-        val_start = vandaag['StartKWhdag'].dropna().iloc[-1] if not vandaag['StartKWhdag'].dropna().empty else None
-        if val_start and float(val_start) > 0:
+        val_start = vandaag['StartKWhdag'].iloc[-1]
+        if pd.notna(val_start) and float(val_start) > 0:
             st.session_state.start_kwh_dag = float(val_start)
         
         v_totaal = pd.to_numeric(vandaag['Totaal'], errors='coerce').max()
@@ -56,9 +55,13 @@ except:
 def sla_naar_sheets(s, g, t, oogst, start_kwh):
     try:
         payload = {
-            "datum": vandaag_nl, "symo": round(float(s), 1), "galvo": round(float(g), 1),
-            "totaal": round(float(t), 1), "oogst": round(float(oogst), 2),
-            "start_kwh": round(float(start_kwh), 3) if start_kwh else 0, "actie": "update"
+            "datum": vandaag_nl,
+            "symo": round(float(s), 1),
+            "galvo": round(float(g), 1),
+            "totaal": round(float(t), 1),
+            "oogst": round(float(oogst), 2),
+            "start_kwh": round(float(start_kwh), 3) if start_kwh else 0,
+            "actie": "update"
         }
         return requests.post(WEBAPP_URL, json=payload, timeout=10).status_code == 200
     except: return False
@@ -74,16 +77,14 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # Borgloon specifiek in de URL gezet
+        # Gecorrigeerde wttr.in URL
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
-        # Filtert dubbele 'C' en vreemde tekens
-        temp_raw = parts[0].replace("Â", "").replace("C", "").strip()
-        temp = f"{temp_raw}°C"
+        temp = parts[0].replace("Â", "").replace("C", "").strip() + "°C"
         desc = parts[1].strip()
         hum = parts[2].strip()
         return temp, desc, hum
-    except: return "15°C", "Licht bewolkt", "50%"
+    except: return "--°C", "Laden...", "--%"
 
 # ====================== LIVE DATA & LOGICA ======================
 val_s, kwh_s = fetch_hw_data(URL_1)
@@ -91,22 +92,19 @@ val_g, kwh_g = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 kwh_totaal_nu = kwh_s + kwh_g
 
-# Vastleggen van startwaarde voor de dag
 if kwh_totaal_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_totaal_nu
 
-# Oogst berekenen
 oogst_vandaag = 0.0
 if st.session_state.start_kwh_dag:
     oogst_vandaag = round(max(0, kwh_totaal_nu - st.session_state.start_kwh_dag), 2)
 
-# Piek bijwerken
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
 
-# Altijd data naar sheets sturen voor live updates
+# ALTIJD update naar sheets om de StartKWhdag te forceren
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
 
 # ====================== UI ======================
@@ -114,10 +112,10 @@ st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum = get_weather()
-col_w1, col_w2, col_w3 = st.columns(3)
-with col_w1: st.metric("🌡️ Temp", temp)
-with col_w2: st.markdown(f"**{desc}**")
-with col_w3: st.metric("💧 Vocht", hum)
+w1, w2, w3 = st.columns(3)
+with w1: st.metric("🌡️ Temp", temp)
+with w2: st.markdown(f"**{desc}**")
+with w3: st.metric("💧 Vocht", hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
@@ -139,10 +137,6 @@ try:
     st.dataframe(df_full.tail(10), use_container_width=True, hide_index=True)
 except:
     st.info("Historiek laden...")
-
-if st.button("🔄 Reset Oogst"):
-    st.session_state.start_kwh_dag = None
-    st.rerun()
 
 time.sleep(2)
 st.rerun()

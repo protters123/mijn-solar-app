@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v10.3 - SHEET SYNC FIX
+# SOLAR PIEK PRO v10.4 - INDIVIDUAL PEAK SYNC
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -41,7 +41,6 @@ df_display = pd.DataFrame()
 @st.cache_data(ttl=30)
 def load_data(url):
     try:
-        # Cache buster om de allerlaatste versie van Google te krijgen
         return pd.read_csv(f"{url}&ts={time.time()}", header=0)
     except: return None
 
@@ -52,24 +51,27 @@ if df_raw is not None:
         df_full = df_raw.iloc[:, :7]
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
         
-        # 1. Bereken All Time Peak
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
-        # 2. Haal data van VANDAAG op om app te synchroniseren met sheet
+        # SYNC MET SHEET DATA VAN VANDAAG
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
-            # SYNC PIEK: Als er in de sheet al een hogere piek staat, neem die over
-            sheet_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
-            if sheet_piek > st.session_state.p_total_peak:
-                st.session_state.p_total_peak = sheet_piek
+            # 1. Sync Symo Piek (Kolom B)
+            s_piek = pd.to_numeric(vandaag_df['Symo'], errors='coerce').max()
+            if s_piek > st.session_state.p_symo_peak:
+                st.session_state.p_symo_peak = s_piek
             
-            # SYNC STARTWAARDE: Neem de startwaarde over die in de sheet staat (Kolom F)
+            # 2. Sync Totaal Piek (Kolom D)
+            t_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
+            if t_piek > st.session_state.p_total_peak:
+                st.session_state.p_total_peak = t_piek
+            
+            # 3. Sync Startwaarde (Kolom F)
             sheet_start = pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce').iloc[0]
             if sheet_start > 1000:
                 st.session_state.start_kwh_dag = float(sheet_start)
         
-        # Historiek tabel
         df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
     except: pass
@@ -101,19 +103,22 @@ val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
-# Gebruik live data als startwaarde ENKEL als de sheet nog helemaal leeg is
 if st.session_state.start_kwh_dag is None and kwh_nu > 0:
     st.session_state.start_kwh_dag = kwh_nu
 
-# Berekening Oogst op basis van gesynchroniseerde startwaarde
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
-# Update lokale piek enkel als deze hoger is dan wat we uit de sheet of live meten
+# Update individuele pieken live
+if val_s > st.session_state.p_symo_peak:
+    st.session_state.p_symo_peak = val_s
+
+if val_g > st.session_state.p_galvo_peak:
+    st.session_state.p_galvo_peak = val_g
+
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
-    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
-# Schrijf terug naar sheets
+# Sync naar Sheets
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 

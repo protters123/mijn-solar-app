@@ -6,12 +6,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v10.8 - DEFINITIEVE OOGST SYNC
+# SOLAR PIEK PRO v10.9 - DECIMAL & SYNC FIX
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# FORCEER CORRECTE URLS
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+# FIX: Jouw unieke script URL weer hersteld
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyLkdLIz2K4X8rIWsq4CF20fgbI9E-t7TEHyqHadCgxxL3seoGwGvN-ZjB-U7YEU3nP/exec"
 
 PUBLIEK_IP = "94.110.235.108"
@@ -40,11 +40,11 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
 all_time_peak = 3729.0
 df_display = pd.DataFrame()
 
-@st.cache_data(ttl=20) # Sneller verversen
+@st.cache_data(ttl=20)
 def load_data(url):
     try:
-        # Cache buster om Google te dwingen de nieuwste CSV te geven
-        return pd.read_csv(f"{url}&ts={time.time()}", header=0)
+        # We lezen de CSV in en vertellen Python dat een komma de decimaal is
+        return pd.read_csv(f"{url}&ts={time.time()}", header=0, decimal=",")
     except: return None
 
 df_raw = load_data(CSV_URL)
@@ -60,23 +60,22 @@ if df_raw is not None:
         
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
-            # SYNC STARTWAARDE (F)
+            # 1. SYNC STARTWAARDE (Kolom F)
             sheet_start = pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce').iloc[0]
             if sheet_start > 1000: st.session_state.start_kwh_dag = float(sheet_start)
 
-            # SYNC OOGST (E) - DIT IS HET BLAUWE VAKJE
+            # 2. SYNC OOGST (Kolom E) - Handig als geheugen bij herstart
             sheet_oogst = pd.to_numeric(vandaag_df['Oogst/dag'], errors='coerce').iloc[0]
             if not pd.isna(sheet_oogst): 
                 st.session_state.oogst_uit_sheet = float(sheet_oogst)
                 
-            # SYNC PIEKEN
+            # 3. SYNC PIEKEN
             sheet_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
             if sheet_piek > st.session_state.p_total_peak:
                 st.session_state.p_total_peak = sheet_piek
-                st.session_state.p_symo_peak = sheet_piek # Omdat Galvo 0 is
+                st.session_state.p_symo_peak = sheet_piek
         
-        df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
-        df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
+        df_display = df_full.sort_values('Datum', ascending=False).head(15)
     except: pass
 
 # ====================== FUNCTIES ======================
@@ -88,12 +87,12 @@ def fetch_hw_data(url):
         kwh = float(r.get('total_power_export_kwh', 0))
         if kwh == 0:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
-        return power, kwh, "🟢"
-    except: return 0, 0, "🔴"
+        return power, kwh
+    except: return 0, 0
 
 def sla_naar_sheets(s, g, t, oogst, start_kwh, kwh_nu, force=False):
     nu_ts = time.time()
-    if force or (nu_ts - st.session_state.last_sheet_update > 20):
+    if force or (nu_ts - st.session_state.last_sheet_update > 25):
         try:
             payload = {"datum": vandaag_nl, "symo": int(s), "galvo": int(g), "totaal": int(t), 
                        "oogst": float(oogst), "start_kwh": float(start_kwh), "kwh_nu": float(kwh_nu), "actie": "update"}
@@ -102,14 +101,14 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh, kwh_nu, force=False):
         except: pass
 
 # ====================== LIVE DATA ======================
-val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
-val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
+val_s, kwh_s = fetch_hw_data(URL_1)
+val_g, kwh_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
 if st.session_state.start_kwh_dag is None and kwh_nu > 0:
     st.session_state.start_kwh_dag = kwh_nu
 
-# BEREKENING: Gebruik de hoogste waarde (Sheet of Live)
+# BEREKENING: Altijd de hoogste waarde pakken om '0.000' te voorkomen bij herstart
 calc_oogst = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 oogst_vandaag = max(calc_oogst, st.session_state.oogst_uit_sheet)
 
@@ -128,14 +127,13 @@ st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ 
 st.progress(min(val_t / 8000, 1.0))
 
 ca, cb = st.columns(2)
-# DIT VAKJE WORDT NU GEFORCEERD OP DE WAARDE UIT JE TABEL
 with ca: st.metric("📈 Oogst vandaag", f"{oogst_vandaag:.3f} kWh")
 with cb: st.metric("🏆 All Time Peak", f"{max(all_time_peak, st.session_state.p_total_peak):,.0f} W")
 
 st.divider()
 c1, c2, c3 = st.columns(3)
-with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
-with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
+with c1: st.metric("Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
+with c2: st.metric("Galvo", f"{val_g} W", "Piek: 0 W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
 st.divider()
@@ -143,7 +141,7 @@ st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-if st.button("🔄 Reset Startwaarde naar Nu"):
+if st.button("🔄 Reset Startwaarde (Nulpunt op NU)"):
     st.session_state.start_kwh_dag = kwh_nu
     st.session_state.oogst_uit_sheet = 0.0
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu, kwh_nu, force=True)

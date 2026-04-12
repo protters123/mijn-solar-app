@@ -6,12 +6,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v10.6 - WEER HERSTELD + SYNC
+# SOLAR PIEK PRO v10.7 - OOGST SYNC FIX
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyLkdLIz2K4X8rIWsq4CF20fgbI9E-t7TEHyqHadCgxxL3seoGwGvN-ZjB-U7YEU3nP/exec"
+# Herstel van je unieke WebApp URL:
+WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -31,6 +32,7 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
     st.session_state.start_kwh_dag = None
+    st.session_state.oogst_uit_sheet = 0.0 # Extra buffer voor de weergave
     st.session_state.last_sheet_update = 0
     st.session_state.initialized = True
 
@@ -56,13 +58,19 @@ if df_raw is not None:
         
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
+            # 1. Sync Pieken
             sheet_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
             if sheet_piek > 10:
                 if sheet_piek > st.session_state.p_total_peak: st.session_state.p_total_peak = sheet_piek
                 if sheet_piek > st.session_state.p_symo_peak: st.session_state.p_symo_peak = sheet_piek
             
+            # 2. Sync Startwaarde (F)
             sheet_start = pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce').iloc[0]
             if sheet_start > 1000: st.session_state.start_kwh_dag = float(sheet_start)
+
+            # 3. Sync Huidige Oogst uit Sheet (E) voor direct live resultaat
+            sheet_oogst = pd.to_numeric(vandaag_df['Oogst/dag'], errors='coerce').iloc[0]
+            if not pd.isna(sheet_oogst): st.session_state.oogst_uit_sheet = float(sheet_oogst)
         
         df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
@@ -95,11 +103,8 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        temp, desc, hum = p[0].replace("+",""), p[1], p[2]
-        d = desc.lower()
-        icon = "☀️" if "zon" in d or "helder" in d else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
-        return temp, desc, hum, icon
-    except: return "12°C", "Licht bewolkt", "80%", "⛅"
+        return p[0].replace("+",""), p[1], p[2], "🌤️"
+    except: return "12°C", "Onbekend", "80%", "⛅"
 
 # ====================== LIVE DATA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -109,7 +114,9 @@ val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 if st.session_state.start_kwh_dag is None and kwh_nu > 0:
     st.session_state.start_kwh_dag = kwh_nu
 
-oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
+# Berekening Oogst (Valt terug op de hogere waarde uit de sheet indien nodig)
+calc_oogst = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
+oogst_vandaag = max(calc_oogst, st.session_state.oogst_uit_sheet)
 
 if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
 if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
@@ -120,9 +127,6 @@ if st.session_state.start_kwh_dag:
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M:%S')}")
-
-# WEER SECTIE HERSTELD
 temp, desc, hum, icon = get_weather()
 w1, w2, w3 = st.columns(3)
 with w1: st.metric("🌡️ Temperatuur", temp)
@@ -150,6 +154,7 @@ if not df_display.empty:
 
 if st.button("🔄 Reset Startwaarde naar Nu"):
     st.session_state.start_kwh_dag = kwh_nu
+    st.session_state.oogst_uit_sheet = 0.0
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu, kwh_nu, force=True)
     st.rerun()
 

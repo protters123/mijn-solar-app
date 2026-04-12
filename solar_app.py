@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v11.3 - SYNC STATUS & AUTO START
+# SOLAR PIEK PRO v12.0 - MAANDOVERZICHT + SYNC
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -38,6 +38,7 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
 # ====================== DATA LADEN ======================
 all_time_peak = 3729.0
 df_display = pd.DataFrame()
+df_monthly = pd.DataFrame()
 stand_gisteren = None
 
 @st.cache_data(ttl=15)
@@ -52,19 +53,28 @@ if df_raw is not None:
     try:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
+        
+        # ATP berekenen
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
+        # Datums omzetten voor verwerking
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
-        # 1. Zoek stand gisteren
+        # MAANDOVERZICHT BEREKENEN
+        df_monthly = df_full.copy()
+        df_monthly['Maand'] = df_monthly['temp_date'].dt.strftime('%m-%Y')
+        df_monthly['Oogst/dag'] = pd.to_numeric(df_monthly['Oogst/dag'], errors='coerce')
+        monthly_summary = df_monthly.groupby('Maand')['Oogst/dag'].sum().reset_index()
+        monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
+
+        # Sync data vandaag
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
             val_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
             if val_gisteren > 1000: stand_gisteren = float(val_gisteren)
 
-        # 2. Sync vandaag
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
             sheet_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
@@ -142,7 +152,6 @@ w3.metric("💧 Vocht", h)
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
-# SYNC STATUS MELDING
 st.caption(f"🔄 Laatste sync naar Google Sheets: **{st.session_state.last_sync_time}**")
 
 ca, cb = st.columns(2)
@@ -156,7 +165,17 @@ with c2: st.metric("Galvo", f"{val_g} W", "Piek: 0 W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
 st.divider()
-st.subheader("📜 Historiek")
+st.subheader("📊 Maandoverzicht")
+if not df_monthly.empty:
+    m_col1, m_col2 = st.columns([1, 2])
+    with m_col1:
+        st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
+    with m_col2:
+        # Een simpele staafgrafiek van de maandelijkse opbrengst
+        st.bar_chart(monthly_summary.set_index('Maand'))
+
+st.divider()
+st.subheader("📜 Historiek (Laatste 15 dagen)")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 

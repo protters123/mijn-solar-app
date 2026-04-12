@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v9.3 - Oogst Geheugen Fix
+# SOLAR PIEK PRO v9.4 - Extra Kolom Sync (G)
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -30,7 +30,7 @@ if 'huidige_datum' not in st.session_state or st.session_state.huidige_datum != 
     st.session_state.p_total_peak = 0.0
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
-    st.session_state.start_kwh_dag = None # Dit is de kritieke waarde
+    st.session_state.start_kwh_dag = None 
     st.session_state.last_sheet_update = 0
 
 # ====================== DATA LADEN ======================
@@ -39,18 +39,17 @@ df_display = pd.DataFrame()
 
 try:
     df_raw = pd.read_csv(CSV_URL, header=0)
-    df_full = df_raw.iloc[:, :6]
-    df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag']
+    # We lezen nu 7 kolommen (A t/m G)
+    df_full = df_raw.iloc[:, :7]
+    df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
     
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
     
-    # Haal startwaarde ALLEEN op uit sheet als we die nog NIET in het geheugen hebben
     if st.session_state.start_kwh_dag is None:
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl]
         if not vandaag_df.empty:
             val_sheet = vandaag_df['StartKWhdag'].iloc[-1]
-            # Alleen accepteren als het een geldig getal > 0 is
             if pd.notna(val_sheet) and float(val_sheet) > 1000: 
                 st.session_state.start_kwh_dag = float(val_sheet)
     
@@ -60,11 +59,21 @@ except:
     pass
 
 # ====================== FUNCTIES ======================
-def sla_naar_sheets(s, g, t, oogst, start_kwh, force=False):
+def sla_naar_sheets(s, g, t, oogst, start_kwh, kwh_nu, force=False):
     nu_ts = time.time()
     if force or (nu_ts - st.session_state.last_sheet_update > 20):
         try:
-            payload = {"datum": vandaag_nl, "symo": int(s), "galvo": int(g), "totaal": int(t), "oogst": float(oogst), "start_kwh": float(start_kwh), "actie": "update"}
+            # Payload uitgebreid met 'kwh_nu' voor de nieuwe kolom G
+            payload = {
+                "datum": vandaag_nl, 
+                "symo": int(s), 
+                "galvo": int(g), 
+                "totaal": int(t), 
+                "oogst": float(oogst), 
+                "start_kwh": float(start_kwh),
+                "kwh_nu": float(kwh_nu), 
+                "actie": "update"
+            }
             requests.post(WEBAPP_URL, json=payload, timeout=5)
             st.session_state.last_sheet_update = nu_ts
         except: pass
@@ -80,39 +89,26 @@ def fetch_hw_data(url):
         return power, kwh, "🟢"
     except: return 0, 0, "🔴"
 
-@st.cache_data(ttl=600)
-def get_weather():
-    try:
-        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
-        p = r.text.strip().split('|')
-        return p[0].replace("+",""), p[1], p[2], "🌤️"
-    except: return "12°C", "Bewolkt", "70%", "☁️"
-
 # ====================== LIVE DATA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
-# Als we na het laden van de sheet nog steeds geen startwaarde hebben, gebruik dan de huidige stand
 if kwh_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_nu
 
-# Berekening Oogst
 oogst_vandaag = round(max(0.0, kwh_nu - st.session_state.start_kwh_dag), 3)
 
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
-sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
+# Stuur alle data inclusief de huidige meterstand (kwh_nu) door
+sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-t, d, h, i = get_weather()
-c_w1, c_w2, c_w3 = st.columns(3)
-c_w1.metric("🌡️ Temp", t)
-c_w2.metric("☁️ Weer", d)
-c_w3.metric("💧 Vocht", h)
+st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M:%S')}")
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
@@ -123,12 +119,6 @@ ca.metric("📈 Oogst vandaag", f"{oogst_vandaag:.3f} kWh")
 cb.metric("🏆 Dag Piek", f"{st.session_state.p_total_peak:,.0f} W")
 
 st.divider()
-c1, c2, c3 = st.columns(3)
-c1.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak} W")
-c2.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak} W")
-c3.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak} W")
-
-st.divider()
 st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
@@ -136,7 +126,8 @@ if not df_display.empty:
 st.divider()
 if st.button("🔄 Reset Oogst naar 0"):
     st.session_state.start_kwh_dag = kwh_nu
-    sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu, force=True)
+    # Forceer update met oogst 0 en nieuwe startwaarde
+    sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu, kwh_nu, force=True)
     st.rerun()
 
 time.sleep(2)

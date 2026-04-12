@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v7.9 - Weer & Historiek Fix
+# SOLAR PIEK PRO v8.0 - Tongeren-Borgloon Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -81,7 +81,7 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # FIX: De URL moet een locatie bevatten (Borgloon)
+        # FIX: URL naar Tongeren-Borgloon hersteld
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
         # Filter vreemde tekens uit temperatuur (+, Â, C)
@@ -113,14 +113,14 @@ sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.s
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
+st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum, icon = get_weather()
 col_w1, col_w2, col_w3 = st.columns(3)
 with col_w1: st.metric("🌡️ Temperatuur", temp)
 with col_w2: 
     st.markdown(f"**{desc}**")
-    st.markdown(f"### {icon}")
+    st.markdown(f"<div style='font-size:30px;'>{icon}</div>", unsafe_allow_html=True)
 with col_w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()
@@ -141,8 +141,6 @@ st.divider()
 st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
-else:
-    st.info("Historiek laden...")
 
 time.sleep(2)
 st.rerun()

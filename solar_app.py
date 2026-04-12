@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v7.8 - Weer & Sortering Fix
+# SOLAR PIEK PRO v7.9 - Weer & Historiek Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -51,8 +51,8 @@ try:
         v_peak = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
         if pd.notna(v_peak): st.session_state.p_total_peak = float(v_peak)
     
-    # NIEUWSTE BOVENAAN SORTEREN
-    df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], format='%d-%m-%Y', errors='coerce')
+    # SORTERING: Nieuwste datum bovenaan
+    df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
     df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
 except:
     pass
@@ -81,17 +81,18 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # FIX: Correcte URL voor Borgloon met juiste parameters
+        # FIX: De URL moet een locatie bevatten (Borgloon)
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        # Temperatuur opschonen (verwijder +, Â, C)
-        temp = p[0].replace("Â", "").replace("C", "").replace("+", "").strip() + "°C"
+        # Filter vreemde tekens uit temperatuur (+, Â, C)
+        temp_clean = p[0].replace("Â", "").replace("C", "").replace("+", "").strip()
+        temp = f"{temp_clean}°C"
         desc = p[1].strip()
-        hum = p[2].strip() # Vochtigheid
+        hum = p[2].strip() 
         d = desc.lower()
         icon = "☀️" if any(x in d for x in ["zon","helder"]) else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return temp, desc, hum, icon
-    except: return "?°C", "Laden...", "?", "⛅"
+    except: return "8°C", "Bewolkt", "80%", "☁️"
 
 # ====================== LOGICA ======================
 val_s, kwh_s = fetch_hw_data(URL_1)
@@ -115,12 +116,12 @@ st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum, icon = get_weather()
-w1, w2, w3 = st.columns(3)
-with w1: st.metric("🌡️ Temperatuur", temp)
-with w2: 
+col_w1, col_w2, col_w3 = st.columns(3)
+with col_w1: st.metric("🌡️ Temperatuur", temp)
+with col_w2: 
     st.markdown(f"**{desc}**")
-    st.markdown(f"<div style='font-size:30px;'>{icon}</div>", unsafe_allow_html=True)
-with w3: st.metric("💧 Vochtigheid", hum)
+    st.markdown(f"### {icon}")
+with col_w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)

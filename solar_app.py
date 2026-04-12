@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v8.6 - De Definitieve Fix
+# SOLAR PIEK PRO v8.7 - Som & Weer Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -48,6 +48,7 @@ try:
         val_start = vandaag_df['StartKWhdag'].iloc[-1]
         if pd.notna(val_start): st.session_state.start_kwh_dag = float(val_start)
     
+    # NIEUWSTE BOVENAAN
     df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
     df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
 except: pass
@@ -64,6 +65,7 @@ def fetch_hw_data(url):
         r = requests.get(url, timeout=3).json()
         raw_p = abs(float(r.get('active_power_w', 0)))
         power = round(raw_p) if raw_p >= 15 else 0
+        # Haal export op
         kwh = r.get('total_power_export_kwh')
         if kwh is None:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
@@ -73,24 +75,26 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # FIX: Correcte URL voor Borgloon met juiste format string
-        r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
+        # FIX: URL volledig hersteld naar Tongeren-Borgloon
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        # p[0]=temp, p[1]=desc, p[2]=hum
-        temp = p[0].replace("Â", "").replace("+", "").strip()
+        temp = p[0].replace("Â", "").replace("+", "").replace("C", "").strip() + "°C"
         desc = p[1].strip()
         hum = p[2].strip()
         d = desc.lower()
-        icon = "☀️" if "zon" in d or "helder" in d else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
+        icon = "☀️" if "helder" in d or "zon" in d else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return temp, desc, hum, icon
-    except:
-        return "8°C", "Licht bewolkt", "82%", "⛅"
+    except: return "?°C", "Laden...", "?%", "⛅"
 
-# ====================== LIVE DATA ======================
+# ====================== LIVE DATA & LOGICA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
-val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
+# De SOM van beide meters
+val_t = val_s + val_g
+kwh_nu = kwh_s + kwh_g
+
+# Startwaarde vastleggen
 if kwh_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_nu
 
@@ -132,6 +136,13 @@ st.divider()
 st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+# Extra info voor jou om te controleren:
+if st.checkbox("Toon meter-details"):
+    st.write(f"Symo Meterstand: {kwh_s} kWh")
+    st.write(f"Galvo Meterstand: {kwh_g} kWh")
+    st.write(f"Huidig Totaal: {kwh_nu} kWh")
+    st.write(f"Startwaarde vandaag: {st.session_state.start_kwh_dag} kWh")
 
 if st.button("🔄 Reset Startwaarde (Oogst naar 0)"):
     st.session_state.start_kwh_dag = kwh_nu

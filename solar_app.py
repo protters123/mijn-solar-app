@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v8.3 - Weerbericht Fix
+# SOLAR PIEK PRO v8.4 - Live Power Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -62,8 +62,10 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh):
 def fetch_hw_data(url):
     try:
         r = requests.get(url, timeout=3).json()
-        raw_power = float(r.get('active_power_w', 0))
+        # FIX: Gebruik abs() voor de threshold check
+        raw_power = abs(float(r.get('active_power_w', 0)))
         power = round(raw_power) if raw_power >= 15 else 0
+        
         kwh = r.get('total_power_export_kwh')
         if kwh is None:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
@@ -74,20 +76,17 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # FIX: De URL is nu Tongeren-Borgloon met de juiste format-parameters
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        # Temperatuur: haal vreemde tekens weg
         t = p[0].replace("Â", "").replace("C", "").replace("+", "").replace("°", "").strip() + "°C"
         desc = p[1].strip()
         hum = p[2].strip()
         d = desc.lower()
         icon = "☀️" if any(x in d for x in ["zon","helder"]) else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return t, desc, hum, icon
-    except:
-        return "6°C", "Licht bewolkt", "82%", "⛅"
+    except: return "?°C", "Laden...", "?", "⛅"
 
-# ====================== LIVE DATA & LOGICA ======================
+# ====================== LOGICA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
@@ -109,12 +108,12 @@ st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum, icon = get_weather()
-col_w1, col_w2, col_w3 = st.columns(3)
-with col_w1: st.metric("🌡️ Temperatuur", temp)
-with col_w2: 
+w1, w2, w3 = st.columns(3)
+with w1: st.metric("🌡️ Temperatuur", temp)
+with w2: 
     st.markdown(f"**{desc}**")
     st.markdown(f"<div style='font-size:30px;'>{icon}</div>", unsafe_allow_html=True)
-with col_w3: st.metric("💧 Vochtigheid", hum)
+with w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)

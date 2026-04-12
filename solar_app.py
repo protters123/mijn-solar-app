@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v4.9 - TypeError + Oogst Fix
+# SOLAR PIEK PRO v5.0 - All Time Peak Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,28 +24,36 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# ====================== SESSION STATE ======================
-if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
-    st.session_state.p_symo_peak = 0.0
-    st.session_state.p_galvo_peak = 0.0
-    st.session_state.p_total_peak = 0.0
-    st.session_state.start_kwh_dag = None
-    st.session_state.huidige_datum = vandaag_iso
-    st.session_state.initialized = True
+# ====================== DATA LADEN & ALL TIME PEAK ======================
+all_time_peak = 0.0
 
-# Laad data uit Sheet
 try:
-    df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
-    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
-    vandaag = df[df['Datum'] == vandaag_nl]
+    df_full = pd.read_csv(CSV_URL, header=0, usecols=range(6))
+    df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
+    
+    # Bereken All Time Peak van de hele tabel
+    totaal_num = pd.to_numeric(df_full['Totaal'], errors='coerce')
+    all_time_peak = totaal_num.max() if not totaal_num.isna().all() else 0.0
+
+    # Initialiseer session state voor vandaag
+    if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
+        st.session_state.p_symo_peak = 0.0
+        st.session_state.p_galvo_peak = 0.0
+        st.session_state.p_total_peak = 0.0
+        st.session_state.start_kwh_dag = None
+        st.session_state.huidige_datum = vandaag_iso
+        st.session_state.initialized = True
+
+    # Laad piekwaarden van vandaag
+    vandaag = df_full[df_full['Datum'] == vandaag_nl]
     if not vandaag.empty:
         start_series = pd.to_numeric(vandaag['StartKWh'], errors='coerce')
         if not start_series.dropna().empty:
             st.session_state.start_kwh_dag = start_series.dropna().iloc[-1]
         
-        vandaag['Totaal_num'] = pd.to_numeric(vandaag['Totaal'], errors='coerce')
-        if not vandaag['Totaal_num'].isna().all():
-            max_row = vandaag.loc[vandaag['Totaal_num'].idxmax()]
+        vandaag_totaal = pd.to_numeric(vandaag['Totaal'], errors='coerce')
+        if not vandaag_totaal.isna().all():
+            max_row = vandaag.loc[vandaag_totaal.idxmax()]
             st.session_state.p_symo_peak = float(max_row.get('Symo', 0))
             st.session_state.p_galvo_peak = float(max_row.get('Galvo', 0))
             st.session_state.p_total_peak = float(max_row.get('Totaal', 0))
@@ -96,18 +104,14 @@ val_s, kwh_s, _ = fetch_hw_data(URL_1)
 val_g, kwh_g, _ = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 
-# Start kWh vastleggen
 if kwh_s is not None and kwh_g is not None and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_s + kwh_g
     sla_naar_sheets(0, 0, 0, 0, st.session_state.start_kwh_dag)
 
-# Oogst veilig berekenen
 oogst_vandaag = 0.0
-if (st.session_state.start_kwh_dag is not None and 
-    kwh_s is not None and kwh_g is not None):
+if (st.session_state.start_kwh_dag is not None and kwh_s is not None and kwh_g is not None):
     oogst_vandaag = round(kwh_s + kwh_g - st.session_state.start_kwh_dag, 2)
 
-# Piek bijwerken
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
@@ -133,7 +137,9 @@ st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt
 st.progress(min(val_t / 8000, 1.0))
 
 st.markdown(f"### 📈 Oogst vandaag: **{oogst_vandaag:.2f} kWh**")
-st.metric("🏆 Piek vandaag", f"{st.session_state.p_total_peak:,.0f} W")
+
+# HIER IS DE WIJZIGING: All Time Peak in plaats van vandaag
+st.metric("🏆 All Time Peak", f"{max(all_time_peak, st.session_state.p_total_peak):,.0f} W")
 
 st.divider()
 
@@ -146,13 +152,13 @@ st.divider()
 
 st.subheader("📜 Historiek")
 try:
-    df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
-    df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
-    for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
-    df = df.sort_values('Datum_dt', ascending=False).head(15)
-    display_df = df[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].rename(columns={'Oogst/dag': 'Oogst'})
+    # Gebruik de reeds geladen df_full voor de tabel
+    df_display = df_full.copy()
+    for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
+        df_display[col] = pd.to_numeric(df_display[col], errors='coerce')
+    df_display['Datum_dt'] = pd.to_datetime(df_display['Datum'], format='%d-%m-%Y', errors='coerce')
+    df_display = df_display.sort_values('Datum_dt', ascending=False).head(15)
+    display_df = df_display[['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag']].rename(columns={'Oogst/dag': 'Oogst'})
     st.dataframe(display_df.style.format({'Symo': '{:.0f}', 'Galvo': '{:.0f}', 'Totaal': '{:.0f}', 'Oogst': '{:.2f}'}), 
                  use_container_width=True, height=400, hide_index=True)
 except:

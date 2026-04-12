@@ -6,11 +6,10 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v9.1 - Historiek & URL Fix
+# SOLAR PIEK PRO v9.3 - Oogst Geheugen Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# FIX: De URL moet exact zo zijn:
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhiYefAqGxI8YXZ0Jm4UqSo2pQ6pO6Ip6ciRGEEWQdXaXl14XR7L83G1ivg0f9VV2r/exec"
 
@@ -25,12 +24,13 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
+# --- GEHEUGEN INITIALISATIE ---
 if 'huidige_datum' not in st.session_state or st.session_state.huidige_datum != vandaag_iso:
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.p_total_peak = 0.0
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
-    st.session_state.start_kwh_dag = None
+    st.session_state.start_kwh_dag = None # Dit is de kritieke waarde
     st.session_state.last_sheet_update = 0
 
 # ====================== DATA LADEN ======================
@@ -42,18 +42,18 @@ try:
     df_full = df_raw.iloc[:, :6]
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag']
     
-    # ATP berekenen
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
     
-    # Startwaarde van vandaag ophalen
+    # Haal startwaarde ALLEEN op uit sheet als we die nog NIET in het geheugen hebben
     if st.session_state.start_kwh_dag is None:
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl]
         if not vandaag_df.empty:
-            val_start = vandaag_df['StartKWhdag'].iloc[-1]
-            if pd.notna(val_start): st.session_state.start_kwh_dag = float(val_start)
+            val_sheet = vandaag_df['StartKWhdag'].iloc[-1]
+            # Alleen accepteren als het een geldig getal > 0 is
+            if pd.notna(val_sheet) and float(val_sheet) > 1000: 
+                st.session_state.start_kwh_dag = float(val_sheet)
     
-    # Data voor historiek tabel voorbereiden
     df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
     df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
 except:
@@ -93,9 +93,11 @@ val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
+# Als we na het laden van de sheet nog steeds geen startwaarde hebben, gebruik dan de huidige stand
 if kwh_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_nu
 
+# Berekening Oogst
 oogst_vandaag = round(max(0.0, kwh_nu - st.session_state.start_kwh_dag), 3)
 
 if val_t > st.session_state.p_total_peak:
@@ -126,13 +128,10 @@ c1.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak} 
 c2.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak} W")
 c3.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak} W")
 
-# --- TABEL TERUGGEPLAATST ---
 st.divider()
-st.subheader("📜 Historiek (Laatste 15 dagen)")
+st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
-else:
-    st.info("Geen historiek gevonden in de Google Sheet.")
 
 st.divider()
 if st.button("🔄 Reset Oogst naar 0"):

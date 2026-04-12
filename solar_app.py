@@ -10,7 +10,7 @@ import pytz
 # ==========================================
 
 # VOLLEDIGE URL'S (Hardcoded om fouten te voorkomen)
-CSV_URL = https://docs.google.com/19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo
+CSV_URL = "https://docs.google.com/19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhiYefAqGxI8YXZ0Jm4UqSo2pQ6pO6Ip6ciRGEEWQdXaXl14XR7L83G1ivg0f9VV2r/exec"
 
 PUBLIEK_IP = "94.110.235.108"

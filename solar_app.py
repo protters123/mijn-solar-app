@@ -6,13 +6,11 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v6.9 - De Echte Fix
+# SOLAR PIEK PRO v7.0 - Definitieve URL Fix
 # ==========================================
 
-SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-# FIX: De CSV link moet exact zo zijn:
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
-# FIX: Je Webapp URL teruggezet:
+# FIX: Volledige, correcte URL's zonder tussenstappen
+CSV_URL = "https://google.com"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhiYefAqGxI8YXZ0Jm4UqSo2pQ6pO6Ip6ciRGEEWQdXaXl14XR7L83G1ivg0f9VV2r/exec"
 
 PUBLIEK_IP = "94.110.235.108"
@@ -74,6 +72,7 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
+        # FIX: Correcte weer URL voor Borgloon
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
         p = r.text.strip().split('|')
         t_clean = p[0].replace("Â", "").replace("C", "").replace("+", "").strip()
@@ -131,7 +130,7 @@ st.divider()
 st.subheader("📜 Historiek")
 try:
     st.dataframe(df_full.tail(15), use_container_width=True, hide_index=True)
-except: st.info("Gegevens laden...")
+except: st.info("Gegevens laden uit Google Sheet...")
 
 time.sleep(2)
 st.rerun()

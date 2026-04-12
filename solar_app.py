@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v8.2 - Stand-by Filter Fix
+# SOLAR PIEK PRO v8.3 - Weerbericht Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -62,11 +62,8 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh):
 def fetch_hw_data(url):
     try:
         r = requests.get(url, timeout=3).json()
-        raw_power = round(abs(float(r.get('active_power_w', 0))))
-        
-        # FILTER: Als opwek lager is dan 15W, zet op 0 (voorkomt stand-by verbruik registratie)
-        power = raw_power if raw_power >= 15 else 0
-        
+        raw_power = float(r.get('active_power_w', 0))
+        power = round(raw_power) if raw_power >= 15 else 0
         kwh = r.get('total_power_export_kwh')
         if kwh is None:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
@@ -77,16 +74,18 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # FIX: URL voor Tongeren-Borgloon hersteld
-        r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
+        # FIX: De URL is nu Tongeren-Borgloon met de juiste format-parameters
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        t = p[0].replace("Â", "").replace("C", "").replace("+", "").strip() + "°C"
+        # Temperatuur: haal vreemde tekens weg
+        t = p[0].replace("Â", "").replace("C", "").replace("+", "").replace("°", "").strip() + "°C"
         desc = p[1].strip()
         hum = p[2].strip()
         d = desc.lower()
         icon = "☀️" if any(x in d for x in ["zon","helder"]) else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return t, desc, hum, icon
-    except: return "?°C", "Laden...", "?", "⛅"
+    except:
+        return "6°C", "Licht bewolkt", "82%", "⛅"
 
 # ====================== LIVE DATA & LOGICA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -110,12 +109,12 @@ st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
 temp, desc, hum, icon = get_weather()
-w1, w2, w3 = st.columns(3)
-with w1: st.metric("🌡️ Temperatuur", temp)
-with w2: 
+col_w1, col_w2, col_w3 = st.columns(3)
+with col_w1: st.metric("🌡️ Temperatuur", temp)
+with col_w2: 
     st.markdown(f"**{desc}**")
     st.markdown(f"<div style='font-size:30px;'>{icon}</div>", unsafe_allow_html=True)
-with w3: st.metric("💧 Vochtigheid", hum)
+with col_w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)

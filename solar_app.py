@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v8.1 - Dynamic Status Fix
+# SOLAR PIEK PRO v8.2 - Stand-by Filter Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -62,24 +62,31 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh):
 def fetch_hw_data(url):
     try:
         r = requests.get(url, timeout=3).json()
-        power = round(abs(float(r.get('active_power_w', 0))))
+        raw_power = round(abs(float(r.get('active_power_w', 0))))
+        
+        # FILTER: Als opwek lager is dan 15W, zet op 0 (voorkomt stand-by verbruik registratie)
+        power = raw_power if raw_power >= 15 else 0
+        
         kwh = r.get('total_power_export_kwh')
         if kwh is None:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
-        return power, float(kwh), "🟢" # Geeft groen bolletje terug bij succes
+        return power, float(kwh), "🟢"
     except:
-        return 0, 0, "🔴" # Geeft rood bolletje terug bij fout
+        return 0, 0, "🔴"
 
 @st.cache_data(ttl=300)
 def get_weather():
     try:
+        # FIX: URL voor Tongeren-Borgloon hersteld
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
         p = r.text.strip().split('|')
         t = p[0].replace("Â", "").replace("C", "").replace("+", "").strip() + "°C"
-        d = p[1].lower()
+        desc = p[1].strip()
+        hum = p[2].strip()
+        d = desc.lower()
         icon = "☀️" if any(x in d for x in ["zon","helder"]) else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
-        return t, p[1], p[2], icon
-    except: return "?°C", "Onbekend", "?", "⛅"
+        return t, desc, hum, icon
+    except: return "?°C", "Laden...", "?", "⛅"
 
 # ====================== LIVE DATA & LOGICA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -120,7 +127,6 @@ with cb: st.metric("🏆 All Time Peak", f"{max(all_time_peak, st.session_state.
 
 st.divider()
 c1, c2, c3 = st.columns(3)
-# HIER WORDEN DE BOLLETJES DYNAMISCH GEBRUIKT
 with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")

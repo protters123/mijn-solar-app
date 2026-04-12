@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v5.8 - StartKWh & Weather Fix
+# SOLAR PIEK PRO v5.9 - Final Sync & Weather
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,9 +24,7 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# ====================== DATA LADEN ======================
-all_time_peak = 0.0
-
+# ====================== SESSION STATE ======================
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
@@ -35,6 +33,8 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
 
+# ====================== DATA LADEN ======================
+all_time_peak = 0.0
 try:
     df_full = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag']
@@ -77,7 +77,7 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # Gecorrigeerde wttr.in URL
+        # Borgloon URL hersteld
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
         temp = parts[0].replace("Â", "").replace("C", "").strip() + "°C"
@@ -86,7 +86,7 @@ def get_weather():
         return temp, desc, hum
     except: return "--°C", "Laden...", "--%"
 
-# ====================== LIVE DATA & LOGICA ======================
+# ====================== LOGICA ======================
 val_s, kwh_s = fetch_hw_data(URL_1)
 val_g, kwh_g = fetch_hw_data(URL_2)
 val_t = val_s + val_g
@@ -104,7 +104,7 @@ if val_t > st.session_state.p_total_peak:
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
 
-# ALTIJD update naar sheets om de StartKWhdag te forceren
+# ALTIJD verzenden voor live-sync
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
 
 # ====================== UI ======================
@@ -134,6 +134,7 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 st.divider()
 st.subheader("📜 Historiek")
 try:
+    # We tonen de dataframe uit de CSV direct
     st.dataframe(df_full.tail(10), use_container_width=True, hide_index=True)
 except:
     st.info("Historiek laden...")

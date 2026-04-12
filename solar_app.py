@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v7.7 - Historiek & Weer Fix
+# SOLAR PIEK PRO v7.8 - Weer & Sortering Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -37,10 +37,10 @@ all_time_peak = 3729.0
 df_display = pd.DataFrame()
 
 try:
-    df_full = pd.read_csv(CSV_URL, header=0).iloc[:, :6]
+    df_raw = pd.read_csv(CSV_URL, header=0)
+    df_full = df_raw.iloc[:, :6]
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag']
     
-    # ATP Berekenen
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
 
@@ -51,9 +51,9 @@ try:
         v_peak = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
         if pd.notna(v_peak): st.session_state.p_total_peak = float(v_peak)
     
-    # SORTEREN: Nieuwste datum bovenaan
-    df_full['tmp_date'] = pd.to_datetime(df_full['Datum'], format='%d-%m-%Y', errors='coerce')
-    df_display = df_full.sort_values('tmp_date', ascending=False).head(15).drop(columns=['tmp_date'])
+    # NIEUWSTE BOVENAAN SORTEREN
+    df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], format='%d-%m-%Y', errors='coerce')
+    df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
 except:
     pass
 
@@ -81,12 +81,13 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # FIX: URL en data extractie
+        # FIX: Correcte URL voor Borgloon met juiste parameters
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        temp = p[0].replace("Â", "").replace("C", "").strip() + "°C"
+        # Temperatuur opschonen (verwijder +, Â, C)
+        temp = p[0].replace("Â", "").replace("C", "").replace("+", "").strip() + "°C"
         desc = p[1].strip()
-        hum = p[2].strip()
+        hum = p[2].strip() # Vochtigheid
         d = desc.lower()
         icon = "☀️" if any(x in d for x in ["zon","helder"]) else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return temp, desc, hum, icon
@@ -140,7 +141,7 @@ st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 else:
-    st.info("Historiek aan het laden uit Google Sheet...")
+    st.info("Historiek laden...")
 
 time.sleep(2)
 st.rerun()

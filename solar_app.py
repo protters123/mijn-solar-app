@@ -6,12 +6,13 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v9.4 - Extra Kolom Sync (G)
+# SOLAR PIEK PRO v9.5 - Final Calculation Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxHx6i-CKeLEgs0vX0RE3uu7cr3sNCoG_rqfhJzUYVDTgkRcgdYIayRbvPTv64Duk7R/exec"
+# Gebruik je meest recente WebApp URL hier:
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyLkdLIz2K4X8rIWsq4CF20fgbI9E-t7TEHyqHadCgxxL3seoGwGvN-ZjB-U7YEU3nP/exec"
 
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -24,7 +25,7 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# --- GEHEUGEN INITIALISATIE ---
+# --- INITIALISATIE ---
 if 'huidige_datum' not in st.session_state or st.session_state.huidige_datum != vandaag_iso:
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.p_total_peak = 0.0
@@ -39,13 +40,13 @@ df_display = pd.DataFrame()
 
 try:
     df_raw = pd.read_csv(CSV_URL, header=0)
-    # We lezen nu 7 kolommen (A t/m G)
-    df_full = df_raw.iloc[:, :7]
+    df_full = df_raw.iloc[:, :7] # A t/m G
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
     
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
     
+    # Haal de startwaarde van vanmorgen op uit de sheet
     if st.session_state.start_kwh_dag is None:
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl]
         if not vandaag_df.empty:
@@ -63,7 +64,6 @@ def sla_naar_sheets(s, g, t, oogst, start_kwh, kwh_nu, force=False):
     nu_ts = time.time()
     if force or (nu_ts - st.session_state.last_sheet_update > 20):
         try:
-            # Payload uitgebreid met 'kwh_nu' voor de nieuwe kolom G
             payload = {
                 "datum": vandaag_nl, 
                 "symo": int(s), 
@@ -94,16 +94,21 @@ val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
+# Beveiliging startwaarde
 if kwh_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_nu
 
-oogst_vandaag = round(max(0.0, kwh_nu - st.session_state.start_kwh_dag), 3)
+# DEFINITIEVE REKENSOM (Gelijk aan Google Sheet formule: G - F)
+oogst_vandaag = 0.0
+if st.session_state.start_kwh_dag:
+    oogst_vandaag = round(max(0.0, kwh_nu - st.session_state.start_kwh_dag), 3)
 
+# Piek bijhouden
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
-# Stuur alle data inclusief de huidige meterstand (kwh_nu) door
+# Update sheets
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
 # ====================== UI ======================
@@ -121,12 +126,12 @@ cb.metric("🏆 Dag Piek", f"{st.session_state.p_total_peak:,.0f} W")
 st.divider()
 st.subheader("📜 Historiek")
 if not df_display.empty:
+    # We tonen de tabel met de nieuwe kolom G (KWhdag)
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 st.divider()
-if st.button("🔄 Reset Oogst naar 0"):
+if st.button("🔄 Reset Oogst (Nieuwe Startwaarde)"):
     st.session_state.start_kwh_dag = kwh_nu
-    # Forceer update met oogst 0 en nieuwe startwaarde
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu, kwh_nu, force=True)
     st.rerun()
 

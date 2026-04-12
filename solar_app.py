@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v8.8 - Bugfix Update
+# SOLAR PIEK PRO v8.9 - Snelheid & Oogst Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,16 +24,13 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
-# --- INITIALISATIE (Robuuste check) ---
+# --- ROBUUSTE INITIALISATIE ---
 if 'huidige_datum' not in st.session_state or st.session_state.huidige_datum != vandaag_iso:
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.p_total_peak = 0.0
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
     st.session_state.start_kwh_dag = None
-
-# Deze moet ALTIJD bestaan voor de timer
-if 'last_sheet_update' not in st.session_state:
     st.session_state.last_sheet_update = 0
 
 # ====================== DATA LADEN ======================
@@ -41,16 +38,19 @@ all_time_peak = 3729.0
 df_display = pd.DataFrame()
 
 try:
+    # We laden de CSV puur voor de historiek en de ATP
     df_raw = pd.read_csv(CSV_URL, header=0)
     df_full = df_raw.iloc[:, :6]
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag']
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
     
-    vandaag_df = df_full[df_full['Datum'] == vandaag_nl]
-    if not vandaag_df.empty and st.session_state.start_kwh_dag is None:
-        val_start = vandaag_df['StartKWhdag'].iloc[-1]
-        if pd.notna(val_start): st.session_state.start_kwh_dag = float(val_start)
+    # Haal startwaarde van vandaag uit de sheet als we die nog niet hebben
+    if st.session_state.start_kwh_dag is None:
+        vandaag_df = df_full[df_full['Datum'] == vandaag_nl]
+        if not vandaag_df.empty:
+            val_start = vandaag_df['StartKWhdag'].iloc[-1]
+            if pd.notna(val_start): st.session_state.start_kwh_dag = float(val_start)
     
     df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
     df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
@@ -59,8 +59,8 @@ except: pass
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh, force=False):
     nu_timestamp = time.time()
-    # Update elke 60 seconden OF bij force (reset knop)
-    if force or (nu_timestamp - st.session_state.last_sheet_update > 60):
+    # Sneller syncen: elke 30 seconden
+    if force or (nu_timestamp - st.session_state.last_sheet_update > 30):
         try:
             payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t, "oogst": oogst, "start_kwh": start_kwh, "actie": "update"}
             requests.post(WEBAPP_URL, json=payload, timeout=5)
@@ -81,23 +81,17 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=600)
 def get_weather():
     try:
-        # GEFIKTE URL (Format met / en ?)
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        temp = p[0].replace("+", "").strip()
-        desc = p[1].strip()
-        hum = p[2].strip()
-        d = desc.lower()
-        icon = "☀️" if "zon" in d or "helder" in d else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
-        return temp, desc, hum, icon
-    except:
-        return "10°C", "Bewolkt", "75%", "☁️"
+        return p[0].replace("+", ""), p[1], p[2], "🌤️"
+    except: return "10°C", "Bewolkt", "75%", "☁️"
 
 # ====================== LIVE DATA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
+# Als we nog GEEN startwaarde hebben (ochtend), zet deze dan nu op de huidige kwh_nu
 if kwh_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_nu
 
@@ -107,18 +101,17 @@ if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
+# Directe upload naar sheets
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
+st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M:%S')}")
 
 temp, desc, hum, icon = get_weather()
 w1, w2, w3 = st.columns(3)
 with w1: st.metric("🌡️ Temperatuur", temp)
-with w2: 
-    st.markdown(f"**{desc}**")
-    st.markdown(f"### {icon}")
+with w2: st.markdown(f"**{desc}**\n### {icon}")
 with w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()

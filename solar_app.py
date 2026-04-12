@@ -6,12 +6,11 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v11.2 - AUTO OVERNIGHT SYNC
+# SOLAR PIEK PRO v11.3 - SYNC STATUS & AUTO START
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-# FIX: Jouw unieke script URL weer hersteld
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
@@ -32,6 +31,7 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
     st.session_state.p_symo_peak = 0.0
     st.session_state.start_kwh_dag = None
     st.session_state.oogst_uit_sheet = 0.0 
+    st.session_state.last_sync_time = "Nog geen sync"
     st.session_state.last_sheet_update = 0
     st.session_state.initialized = True
 
@@ -52,39 +52,32 @@ if df_raw is not None:
     try:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
-        
-        # ATP
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
-        # --- SLIMME STARTWAARDE LOGICA ---
-        # 1. Zoek de stand van de vorige dag (eerste rij die niet vandaag is)
+        # 1. Zoek stand gisteren
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
             val_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
-            if val_gisteren > 1000:
-                stand_gisteren = float(val_gisteren)
+            if val_gisteren > 1000: stand_gisteren = float(val_gisteren)
 
-        # 2. Sync data van vandaag
+        # 2. Sync vandaag
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
-            # Piek Sync
             sheet_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
             if sheet_piek > st.session_state.p_total_peak:
                 st.session_state.p_total_peak = sheet_piek
                 st.session_state.p_symo_peak = sheet_piek
 
-            # Startwaarde Sync (Prioriteit: 1. Sheet zelf, 2. Stand gisteren)
             sheet_start = pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce').iloc[0]
             if sheet_start > 1000:
                 st.session_state.start_kwh_dag = float(sheet_start)
             elif stand_gisteren:
                 st.session_state.start_kwh_dag = stand_gisteren
 
-            # Oogst Sync
             sheet_oogst = pd.to_numeric(vandaag_df['Oogst/dag'], errors='coerce').iloc[0]
             if not pd.isna(sheet_oogst): st.session_state.oogst_uit_sheet = float(sheet_oogst)
         
@@ -95,12 +88,11 @@ if df_raw is not None:
 def fetch_hw_data(url):
     try:
         r = requests.get(url, timeout=3).json()
-        raw_p = abs(float(r.get('active_power_w', 0)))
-        power = round(raw_p) if raw_p >= 10 else 0
+        power = round(abs(float(r.get('active_power_w', 0))))
         kwh = float(r.get('total_power_export_kwh', 0))
         if kwh == 0:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
-        return power, kwh
+        return (power if power >= 10 else 0), kwh
     except: return 0, 0
 
 def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu, force=False):
@@ -111,6 +103,7 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu, force=Fals
                        "oogst": float(oogst), "start_kwh": float(start_kwh), "kwh_nu": float(kwh_nu), "actie": "update"}
             requests.post(WEBAPP_URL, json=payload, timeout=5)
             st.session_state.last_sheet_update = nu_ts
+            st.session_state.last_sync_time = datetime.now(tz).strftime('%H:%M:%S')
         except: pass
 
 @st.cache_data(ttl=600)
@@ -126,14 +119,9 @@ val_s, kwh_s = fetch_hw_data(URL_1)
 val_g, kwh_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
-# Gebruik de stand van gisteravond als fallback als de sheet van vandaag nog leeg is
 if st.session_state.start_kwh_dag is None:
-    if stand_gisteren:
-        st.session_state.start_kwh_dag = stand_gisteren
-    elif kwh_nu > 0:
-        st.session_state.start_kwh_dag = kwh_nu
+    st.session_state.start_kwh_dag = stand_gisteren if stand_gisteren else kwh_nu
 
-# Berekening Oogst
 calc_oogst = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 oogst_vandaag = max(calc_oogst, st.session_state.oogst_uit_sheet)
 
@@ -154,6 +142,8 @@ w3.metric("💧 Vocht", h)
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
+# SYNC STATUS MELDING
+st.caption(f"🔄 Laatste sync naar Google Sheets: **{st.session_state.last_sync_time}**")
 
 ca, cb = st.columns(2)
 with ca: st.metric("📈 Oogst vandaag", f"{oogst_vandaag:.3f} kWh")

@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v8.9 - Lay-out & Style Fix
+# SOLAR PIEK PRO v9.0 - Live Deployment Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -75,11 +75,11 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
+        # Locatie nu vast op Tongeren-Borgloon
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
         p = r.text.strip().split('|')
         temp = p[0].replace("Â", "").replace("+", "").replace("C", "").strip() + "°C"
-        desc = p[1].strip()
-        hum = p[2].strip()
+        desc, hum = p[1].strip(), p[2].strip()
         d = desc.lower()
         icon = "☀️" if "helder" in d or "zon" in d else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return temp, desc, hum, icon
@@ -107,51 +107,42 @@ sla_naar_sheets(v_s, v_g, st.session_state.p_total_peak, oogst_vandaag, st.sessi
 
 # ====================== UI LAYOUT ======================
 st.title("☀️ Solar Piek PRO")
-st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
+st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
-# WEER SECTIE (Zoals in je afbeelding)
+# WEER SECTIE
 temp, desc, hum, icon = get_weather()
-col_w1, col_w2, col_w3 = st.columns([1, 1.5, 1])
-with col_w1:
-    st.metric("🌡️ Temperatuur", temp)
-with col_w2:
-    st.markdown(f"<div style='text-align:center;'><b>{desc}</b><br><span style='font-size:4rem;'>{icon}</span></div>", unsafe_allow_html=True)
-with col_w3:
-    st.metric("💧 Vochtigheid", hum)
+col_w1, col_w2, col_w3 = st.columns([1, 1.2, 1])
+with col_w1: st.metric("🌡️ Temperatuur", temp)
+with col_w2: st.markdown(f"<div style='text-align:center;'><b>{desc}</b><br><span style='font-size:3.5rem;'>{icon}</span></div>", unsafe_allow_html=True)
+with col_w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()
 
 # HOOFD WATT WEERGAVE
-st.markdown(f"<h1 style='text-align:center; color:#FFB300; font-size:4rem;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
+st.markdown(f"<h1 style='text-align:center; color:#FFB300; font-size:4.5rem; margin-bottom:-10px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
 
 # OOGST & PIEK RIJ
-col_o1, col_o2 = st.columns([2, 1])
-with col_o1:
-    st.markdown(f"### 📈 Oogst vandaag: **{oogst_vandaag:.2f} kWh**")
-with col_o2:
-    st.metric("🏆 Piek vandaag", f"{st.session_state.p_total_peak:,.0f} W")
+col_o1, col_o2 = st.columns(2)
+with col_o1: st.markdown(f"### 📈 Oogst vandaag: **{oogst_vandaag:.2f} kWh**")
+with col_o2: st.metric("🏆 Piek vandaag", f"{st.session_state.p_total_peak:,.0f} W")
 
 st.divider()
 
 # INVERTER DETAILS
 c1, c2, c3 = st.columns(3)
-with c1:
-    st.metric(f"{d_s} Symo", f"{v_s:,.0f} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
-with c2:
-    st.metric(f"{d_g} Galvo", f"{v_g:,.0f} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
-with c3:
-    st.metric("☀️ Totaal", f"{val_t:,.0f} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
+with c1: st.metric(f"{d_s} Symo", f"{v_s:,.0f} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
+with c2: st.metric(f"{d_g} Galvo", f"{v_g:,.0f} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
+with c3: st.metric("☀️ Totaal", f"{val_t:,.0f} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
 st.divider()
-
-# HISTORIEK
 st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-if st.button("🔄 Reset Oogst"):
+if st.button("🔄 Reset Oogst (Startwaarde naar nu)"):
     st.session_state.start_kwh_dag = kwh_nu
+    sla_naar_sheets(v_s, v_g, st.session_state.p_total_peak, 0, kwh_nu)
     st.rerun()
 
 time.sleep(2)

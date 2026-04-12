@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v5.0 - All Time Peak Fix
+# SOLAR PIEK PRO v5.1 - 2s Refresh + All Time Peak
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -31,11 +31,9 @@ try:
     df_full = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
     
-    # Bereken All Time Peak van de hele tabel
     totaal_num = pd.to_numeric(df_full['Totaal'], errors='coerce')
     all_time_peak = totaal_num.max() if not totaal_num.isna().all() else 0.0
 
-    # Initialiseer session state voor vandaag
     if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
         st.session_state.p_symo_peak = 0.0
         st.session_state.p_galvo_peak = 0.0
@@ -44,7 +42,6 @@ try:
         st.session_state.huidige_datum = vandaag_iso
         st.session_state.initialized = True
 
-    # Laad piekwaarden van vandaag
     vandaag = df_full[df_full['Datum'] == vandaag_nl]
     if not vandaag.empty:
         start_series = pd.to_numeric(vandaag['StartKWh'], errors='coerce')
@@ -137,8 +134,6 @@ st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt
 st.progress(min(val_t / 8000, 1.0))
 
 st.markdown(f"### 📈 Oogst vandaag: **{oogst_vandaag:.2f} kWh**")
-
-# HIER IS DE WIJZIGING: All Time Peak in plaats van vandaag
 st.metric("🏆 All Time Peak", f"{max(all_time_peak, st.session_state.p_total_peak):,.0f} W")
 
 st.divider()
@@ -152,7 +147,6 @@ st.divider()
 
 st.subheader("📜 Historiek")
 try:
-    # Gebruik de reeds geladen df_full voor de tabel
     df_display = df_full.copy()
     for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
         df_display[col] = pd.to_numeric(df_display[col], errors='coerce')
@@ -170,5 +164,6 @@ if st.button("🔄 Reset Oogst vandaag", type="secondary"):
     time.sleep(2)
     st.rerun()
 
-time.sleep(5)
+# VERVERSINGSTIJD AANGEPAST NAAR 2 SECONDEN
+time.sleep(2)
 st.rerun()

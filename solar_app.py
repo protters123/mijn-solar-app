@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v8.6 - De Definitieve Fix
+# SOLAR PIEK PRO v8.7 - Geoptimaliseerd
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -24,11 +24,13 @@ nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
+# Initialisatie session state
 if 'initialized' not in st.session_state or st.session_state.get('huidige_datum') != vandaag_iso:
     st.session_state.p_total_peak = 0.0
     st.session_state.p_symo_peak = 0.0
     st.session_state.p_galvo_peak = 0.0
     st.session_state.start_kwh_dag = None
+    st.session_state.last_sheet_update = 0  # Timer voor Google Sheets
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.initialized = True
 
@@ -53,11 +55,15 @@ try:
 except: pass
 
 # ====================== FUNCTIES ======================
-def sla_naar_sheets(s, g, t, oogst, start_kwh):
-    try:
-        payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t, "oogst": oogst, "start_kwh": start_kwh, "actie": "update"}
-        requests.post(WEBAPP_URL, json=payload, timeout=5)
-    except: pass
+def sla_naar_sheets(s, g, t, oogst, start_kwh, force=False):
+    # Update alleen als er 60 seconden voorbij zijn, of bij een force (reset)
+    nu_timestamp = time.time()
+    if force or (nu_timestamp - st.session_state.last_sheet_update > 60):
+        try:
+            payload = {"datum": vandaag_nl, "symo": s, "galvo": g, "totaal": t, "oogst": oogst, "start_kwh": start_kwh, "actie": "update"}
+            requests.post(WEBAPP_URL, json=payload, timeout=5)
+            st.session_state.last_sheet_update = nu_timestamp
+        except: pass
 
 def fetch_hw_data(url):
     try:
@@ -70,21 +76,20 @@ def fetch_hw_data(url):
         return power, float(kwh), "🟢"
     except: return 0, 0, "🔴"
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600) # Cache weer voor 10 min
 def get_weather():
     try:
-        # FIX: Correcte URL voor Borgloon met juiste format string
-        r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
+        # Geoptimaliseerde wttr.in URL voor Borgloon
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
-        # p[0]=temp, p[1]=desc, p[2]=hum
-        temp = p[0].replace("Â", "").replace("+", "").strip()
+        temp = p[0].replace("+", "").strip()
         desc = p[1].strip()
         hum = p[2].strip()
         d = desc.lower()
         icon = "☀️" if "zon" in d or "helder" in d else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return temp, desc, hum, icon
     except:
-        return "8°C", "Licht bewolkt", "82%", "⛅"
+        return "10°C", "Bewolkt", "75%", "☁️"
 
 # ====================== LIVE DATA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -100,6 +105,7 @@ if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
+# Probeert elke minuut op te slaan
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
 
 # ====================== UI ======================
@@ -135,7 +141,7 @@ if not df_display.empty:
 
 if st.button("🔄 Reset Startwaarde (Oogst naar 0)"):
     st.session_state.start_kwh_dag = kwh_nu
-    sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu)
+    sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu, force=True)
     st.rerun()
 
 time.sleep(2)

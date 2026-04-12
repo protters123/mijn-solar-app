@@ -6,12 +6,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v10.1 - HISTORY RELOAD FIX
+# SOLAR PIEK PRO v10.2 - FINAL STABLE
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyLkdLIz2K4X8rIWsq4CF20fgbI9E-t7TEHyqHadCgxxL3seoGwGvN-ZjB-U7YEU3nP/exec"
+WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -39,11 +39,11 @@ all_time_peak = 3729.0
 df_display = pd.DataFrame()
 error_msg = None
 
-@st.cache_data(ttl=60) # Cache de historiek voor 60 sec om Google blokkades te voorkomen
+@st.cache_data(ttl=60)
 def load_history_data(url):
     try:
-        # Gebruik een simpele cache buster
-        df = pd.read_csv(f"{url}&ts={datetime.now().minute}", header=0, timeout=5)
+        # FIX: timeout parameter verwijderd uit read_csv
+        df = pd.read_csv(f"{url}&ts={datetime.now().minute}", header=0)
         return df
     except Exception as e:
         return str(e)
@@ -60,16 +60,18 @@ if isinstance(data_result, pd.DataFrame):
         
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
-            geldige_starts = vandaag_df[pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce') > 1000]['StartKWhdag']
+            # Zoek een geldige startwaarde van vandaag
+            vandaag_df['StartKWhdag'] = pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce')
+            geldige_starts = vandaag_df[vandaag_df['StartKWhdag'] > 1000]['StartKWhdag']
             if not geldige_starts.empty:
                 st.session_state.start_kwh_dag = float(geldige_starts.iloc[0])
         
         df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
-    except:
-        error_msg = "Kolom-indeling van de sheet is onjuist."
+    except Exception as e:
+        error_msg = f"Data verwerkingsfout: {e}"
 else:
-    error_msg = f"Google Sheets verbinding verbroken: {data_result}"
+    error_msg = f"Google Sheets error: {data_result}"
 
 # ====================== FUNCTIES ======================
 def fetch_hw_data(url):
@@ -98,15 +100,19 @@ val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
+# Gebruik live data als startwaarde indien sheet nog leeg is
 if st.session_state.start_kwh_dag is None and kwh_nu > 0:
     st.session_state.start_kwh_dag = kwh_nu
 
+# Berekening Oogst
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
+# Piek tracking
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
+# Update Google Sheets
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
@@ -135,7 +141,7 @@ if not df_display.empty:
 elif error_msg:
     st.error(error_msg)
 else:
-    st.info("Historiek wordt geladen...")
+    st.info("Historiek wordt geladen uit Google Sheets...")
 
 st.divider()
 if st.button("🔄 Reset Startwaarde (Nieuw beginpunt)"):

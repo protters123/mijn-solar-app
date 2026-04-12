@@ -6,12 +6,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v9.6 - Screenshot Style Fix
+# SOLAR PIEK PRO v9.7 - FULL RESTORE + G-FIX
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://google.com"
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyLkdLIz2K4X8rIWsq4CF20fgbI9E-t7TEHyqHadCgxxL3seoGwGvN-ZjB-U7YEU3nP/exec"
 
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -28,6 +28,8 @@ vandaag_iso = nu.strftime('%Y-%m-%d')
 if 'huidige_datum' not in st.session_state or st.session_state.huidige_datum != vandaag_iso:
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.p_total_peak = 0.0
+    st.session_state.p_symo_peak = 0.0
+    st.session_state.p_galvo_peak = 0.0
     st.session_state.start_kwh_dag = None 
     st.session_state.last_sheet_update = 0
 
@@ -37,10 +39,10 @@ df_display = pd.DataFrame()
 
 try:
     df_raw = pd.read_csv(CSV_URL, header=0)
-    # We lezen 7 kolommen (A t/m G) voor de volledige historiek
     df_full = df_raw.iloc[:, :7]
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
     
+    # All Time Peak berekenen uit alle historische data
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
     
@@ -53,8 +55,7 @@ try:
     
     df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
     df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
-except:
-    pass
+except: pass
 
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh, kwh_nu, force=False):
@@ -78,51 +79,72 @@ def fetch_hw_data(url):
         kwh = float(r.get('total_power_export_kwh', 0))
         if kwh == 0:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
-        return power, kwh
-    except: return 0, 0
+        return power, kwh, "🟢"
+    except: return 0, 0, "🔴"
+
+@st.cache_data(ttl=600)
+def get_weather():
+    try:
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
+        p = r.text.strip().split('|')
+        return p[0].replace("+",""), p[1], p[2], "🌤️"
+    except: return "12°C", "Licht bewolkt", "80%", "⛅"
 
 # ====================== LIVE DATA ======================
-val_s, kwh_s = fetch_hw_data(URL_1)
-val_g, kwh_g = fetch_hw_data(URL_2)
+val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
+val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
 if kwh_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_nu
 
-# Berekening Oogst (Meter NU - Meter Ochtend)
+# Berekening Oogst
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
+    st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
 # Sync naar Sheets
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
-# ====================== UI (Volgens Screenshot) ======================
-st.markdown("<h1 style='text-align: center;'>☀️ Solar Piek PRO</h1>", unsafe_allow_html=True)
-st.markdown(f"<p style='text-align: center; color: gray;'>📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
+# ====================== UI ======================
+st.title("☀️ Solar Piek PRO")
+st.caption(f"📍 Tongeren-Borgloon • {vandaag_nl} • {nu.strftime('%H:%M:%S')}")
+
+# WEER TERUGGEPLAATST
+temp, desc, hum, icon = get_weather()
+w1, w2, w3 = st.columns(3)
+with w1: st.metric("🌡️ Temperatuur", temp)
+with w2: st.markdown(f"**{desc}**\n### {icon}")
+with w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()
 
-# Centrale Wattage weergave
-st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 60px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
+# Centrale Wattage
+st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
 
-# Twee kolommen voor Oogst en Dag Piek
-c1, c2 = st.columns(2)
-c1.metric("📉 Oogst vandaag", f"{oogst_vandaag:.3f} kWh")
-c2.metric("🏆 Dag Piek", f"{st.session_state.p_total_peak:,.0f} W")
+# Metrics
+ca, cb = st.columns(2)
+with ca: st.metric("📈 Oogst vandaag", f"{oogst_vandaag:.3f} kWh")
+with cb: st.metric("🏆 All Time Peak", f"{max(all_time_peak, st.session_state.p_total_peak):,.0f} W")
 
 st.divider()
 
-# Historiek Sectie
+# INDIVIDUELE DETAILS TERUGGEPLAATST
+c1, c2, c3 = st.columns(3)
+with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak} W")
+with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak} W")
+with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
+
+st.divider()
+
+# Historiek
 st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-st.divider()
-
-# Reset knop onderaan
 if st.button("🔄 Reset Startwaarde (Oogst naar 0)"):
     st.session_state.start_kwh_dag = kwh_nu
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu, kwh_nu, force=True)

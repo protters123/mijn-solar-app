@@ -6,11 +6,12 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v7.0 - Definitieve URL Fix
+# SOLAR PIEK PRO v7.1 - Historiek & Weer Fix
 # ==========================================
 
-# FIX: Volledige, correcte URL's zonder tussenstappen
-CSV_URL = "https://google.com"
+# CONTROLEER DEZE ID: Het moet de ID zijn uit je Google Sheet URL
+SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
+CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhiYefAqGxI8YXZ0Jm4UqSo2pQ6pO6Ip6ciRGEEWQdXaXl14XR7L83G1ivg0f9VV2r/exec"
 
 PUBLIEK_IP = "94.110.235.108"
@@ -35,9 +36,16 @@ if 'initialized' not in st.session_state or st.session_state.get('huidige_datum'
 
 # ====================== DATA LADEN ======================
 all_time_peak = 3729.0
+df_display = pd.DataFrame()
+
 try:
-    df_full = pd.read_csv(CSV_URL, header=0, usecols=range(6))
+    # Forceer inladen van de CSV
+    df_raw = pd.read_csv(CSV_URL, header=0)
+    # Filter alleen de eerste 6 kolommen om rommel te voorkomen
+    df_full = df_raw.iloc[:, :6]
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag']
+    
+    # ATP Berekenen
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
 
@@ -47,8 +55,10 @@ try:
         if pd.notna(val_start): st.session_state.start_kwh_dag = float(val_start)
         v_totaal = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
         if pd.notna(v_totaal): st.session_state.p_total_peak = float(v_totaal)
-except:
-    pass
+    
+    df_display = df_full.tail(15)
+except Exception as e:
+    st.error(f"Sheet Error: {e}")
 
 # ====================== FUNCTIES ======================
 def sla_naar_sheets(s, g, t, oogst, start_kwh):
@@ -72,7 +82,6 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
-        # FIX: Correcte weer URL voor Borgloon
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
         p = r.text.strip().split('|')
         t_clean = p[0].replace("Â", "").replace("C", "").replace("+", "").strip()
@@ -104,13 +113,16 @@ sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.s
 st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
-temp, desc, hum, icon = get_weather()
-w1, w2, w3 = st.columns(3)
-with w1: st.metric("🌡️ Temperatuur", temp)
-with w2: 
-    st.markdown(f"**{desc}**")
-    st.markdown(f"## {icon}")
-with w3: st.metric("💧 Vochtigheid", f"{hum}")
+# WEER SECTIE
+try:
+    temp, desc, hum, icon = get_weather()
+    w1, w2, w3 = st.columns(3)
+    with w1: st.metric("🌡️ Temperatuur", temp)
+    with w2: 
+        st.markdown(f"**{desc}**")
+        st.markdown(f"## {icon}")
+    with w3: st.metric("💧 Vochtigheid", hum)
+except: pass
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
@@ -128,9 +140,10 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 st.divider()
 st.subheader("📜 Historiek")
-try:
-    st.dataframe(df_full.tail(15), use_container_width=True, hide_index=True)
-except: st.info("Gegevens laden uit Google Sheet...")
+if not df_display.empty:
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+else:
+    st.info("Gegevens laden uit Google Sheet...")
 
 time.sleep(2)
 st.rerun()

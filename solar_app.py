@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v12.0 - MAANDOVERZICHT + SYNC
+# SOLAR PIEK PRO v12.1 - STATUS DOTS + SYNC
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -53,23 +53,18 @@ if df_raw is not None:
     try:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
-        
-        # ATP berekenen
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
-        # Datums omzetten voor verwerking
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
-        # MAANDOVERZICHT BEREKENEN
         df_monthly = df_full.copy()
         df_monthly['Maand'] = df_monthly['temp_date'].dt.strftime('%m-%Y')
         df_monthly['Oogst/dag'] = pd.to_numeric(df_monthly['Oogst/dag'], errors='coerce')
         monthly_summary = df_monthly.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
 
-        # Sync data vandaag
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
             val_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
@@ -102,8 +97,9 @@ def fetch_hw_data(url):
         kwh = float(r.get('total_power_export_kwh', 0))
         if kwh == 0:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
-        return (power if power >= 10 else 0), kwh
-    except: return 0, 0
+        # Status bolletje groen als er succesvol data is opgehaald
+        return (power if power >= 10 else 0), kwh, "🟢"
+    except: return 0, 0, "🔴" # Rood bolletje bij fout
 
 def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu, force=False):
     nu_ts = time.time()
@@ -125,8 +121,8 @@ def get_weather():
     except: return "12°C", "Onbekend", "80%", "⛅"
 
 # ====================== LIVE DATA ======================
-val_s, kwh_s = fetch_hw_data(URL_1)
-val_g, kwh_g = fetch_hw_data(URL_2)
+val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
+val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
 if st.session_state.start_kwh_dag is None:
@@ -160,8 +156,9 @@ with cb: st.metric("🏆 All Time Peak", f"{max(all_time_peak, st.session_state.
 
 st.divider()
 c1, c2, c3 = st.columns(3)
-with c1: st.metric("Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
-with c2: st.metric("Galvo", f"{val_g} W", "Piek: 0 W")
+# Bolletjes hersteld in de titels van de omvormers
+with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
+with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", "Piek: 0 W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
 st.divider()
@@ -171,7 +168,6 @@ if not df_monthly.empty:
     with m_col1:
         st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
     with m_col2:
-        # Een simpele staafgrafiek van de maandelijkse opbrengst
         st.bar_chart(monthly_summary.set_index('Maand'))
 
 st.divider()

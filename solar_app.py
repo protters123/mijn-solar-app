@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v10.2 - FINAL STABLE
+# SOLAR PIEK PRO v10.3 - SHEET SYNC FIX
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -37,41 +37,42 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
 # ====================== DATA LADEN ======================
 all_time_peak = 3729.0
 df_display = pd.DataFrame()
-error_msg = None
 
-@st.cache_data(ttl=60)
-def load_history_data(url):
+@st.cache_data(ttl=30)
+def load_data(url):
     try:
-        # FIX: timeout parameter verwijderd uit read_csv
-        df = pd.read_csv(f"{url}&ts={datetime.now().minute}", header=0)
-        return df
-    except Exception as e:
-        return str(e)
+        # Cache buster om de allerlaatste versie van Google te krijgen
+        return pd.read_csv(f"{url}&ts={time.time()}", header=0)
+    except: return None
 
-data_result = load_history_data(CSV_URL)
+df_raw = load_data(CSV_URL)
 
-if isinstance(data_result, pd.DataFrame):
+if df_raw is not None:
     try:
-        df_full = data_result.iloc[:, :7]
+        df_full = df_raw.iloc[:, :7]
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
         
+        # 1. Bereken All Time Peak
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
+        # 2. Haal data van VANDAAG op om app te synchroniseren met sheet
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
-            # Zoek een geldige startwaarde van vandaag
-            vandaag_df['StartKWhdag'] = pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce')
-            geldige_starts = vandaag_df[vandaag_df['StartKWhdag'] > 1000]['StartKWhdag']
-            if not geldige_starts.empty:
-                st.session_state.start_kwh_dag = float(geldige_starts.iloc[0])
+            # SYNC PIEK: Als er in de sheet al een hogere piek staat, neem die over
+            sheet_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
+            if sheet_piek > st.session_state.p_total_peak:
+                st.session_state.p_total_peak = sheet_piek
+            
+            # SYNC STARTWAARDE: Neem de startwaarde over die in de sheet staat (Kolom F)
+            sheet_start = pd.to_numeric(vandaag_df['StartKWhdag'], errors='coerce').iloc[0]
+            if sheet_start > 1000:
+                st.session_state.start_kwh_dag = float(sheet_start)
         
+        # Historiek tabel
         df_full['Datum_dt'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_display = df_full.sort_values('Datum_dt', ascending=False).head(15).drop(columns=['Datum_dt'])
-    except Exception as e:
-        error_msg = f"Data verwerkingsfout: {e}"
-else:
-    error_msg = f"Google Sheets error: {data_result}"
+    except: pass
 
 # ====================== FUNCTIES ======================
 def fetch_hw_data(url):
@@ -100,19 +101,19 @@ val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
-# Gebruik live data als startwaarde indien sheet nog leeg is
+# Gebruik live data als startwaarde ENKEL als de sheet nog helemaal leeg is
 if st.session_state.start_kwh_dag is None and kwh_nu > 0:
     st.session_state.start_kwh_dag = kwh_nu
 
-# Berekening Oogst
+# Berekening Oogst op basis van gesynchroniseerde startwaarde
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
-# Piek tracking
+# Update lokale piek enkel als deze hoger is dan wat we uit de sheet of live meten
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak, st.session_state.p_galvo_peak = val_s, val_g
 
-# Update Google Sheets
+# Schrijf terug naar sheets
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
@@ -138,13 +139,8 @@ st.divider()
 st.subheader("📜 Historiek")
 if not df_display.empty:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
-elif error_msg:
-    st.error(error_msg)
-else:
-    st.info("Historiek wordt geladen uit Google Sheets...")
 
-st.divider()
-if st.button("🔄 Reset Startwaarde (Nieuw beginpunt)"):
+if st.button("🔄 Reset Startwaarde naar Nu"):
     st.session_state.start_kwh_dag = kwh_nu
     sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, 0, kwh_nu, kwh_nu, force=True)
     st.rerun()

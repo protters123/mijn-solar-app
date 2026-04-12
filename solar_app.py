@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v5.6 - Export Fix + Weer Fix
+# SOLAR PIEK PRO v5.7 - Weather & Sync Fix
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -42,9 +42,11 @@ try:
 
     vandaag = df_full[df_full['Datum'] == vandaag_nl]
     if not vandaag.empty:
-        val = vandaag['StartKWhdag'].iloc[-1]
-        if pd.notna(val) and float(val) > 0:
-            st.session_state.start_kwh_dag = float(val)
+        # Altijd de meest recente startwaarde uit de sheet halen
+        val_start = vandaag['StartKWhdag'].dropna().iloc[-1] if not vandaag['StartKWhdag'].dropna().empty else None
+        if val_start and float(val_start) > 0:
+            st.session_state.start_kwh_dag = float(val_start)
+        
         v_totaal = pd.to_numeric(vandaag['Totaal'], errors='coerce').max()
         st.session_state.p_total_peak = max(float(v_totaal if pd.notna(v_totaal) else 0), st.session_state.p_total_peak)
 except:
@@ -65,7 +67,6 @@ def fetch_hw_data(url):
     try:
         data = requests.get(url, timeout=3).json()
         power = round(abs(float(data.get('active_power_w', 0))))
-        # Pakt de som van Export T1 en T2 (de zonne-opbrengst kant)
         kwh = float(data.get('total_power_export_t1_kwh', 0)) + float(data.get('total_power_export_t2_kwh', 0))
         return power, kwh
     except: return 0, 0
@@ -73,10 +74,12 @@ def fetch_hw_data(url):
 @st.cache_data(ttl=300)
 def get_weather():
     try:
+        # Borgloon specifiek in de URL gezet
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=8)
         parts = r.text.strip().split('|')
-        # Filtert dubbele 'C' en vreemde tekens uit de temperatuur
-        temp = parts[0].replace("Â", "").replace("C", "").strip() + "°C"
+        # Filtert dubbele 'C' en vreemde tekens
+        temp_raw = parts[0].replace("Â", "").replace("C", "").strip()
+        temp = f"{temp_raw}°C"
         desc = parts[1].strip()
         hum = parts[2].strip()
         return temp, desc, hum
@@ -88,19 +91,22 @@ val_g, kwh_g = fetch_hw_data(URL_2)
 val_t = val_s + val_g
 kwh_totaal_nu = kwh_s + kwh_g
 
+# Vastleggen van startwaarde voor de dag
 if kwh_totaal_nu > 0 and st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = kwh_totaal_nu
 
+# Oogst berekenen
 oogst_vandaag = 0.0
 if st.session_state.start_kwh_dag:
     oogst_vandaag = round(max(0, kwh_totaal_nu - st.session_state.start_kwh_dag), 2)
 
+# Piek bijwerken
 if val_t > st.session_state.p_total_peak:
     st.session_state.p_total_peak = val_t
     st.session_state.p_symo_peak = max(val_s, st.session_state.p_symo_peak)
     st.session_state.p_galvo_peak = max(val_g, st.session_state.p_galvo_peak)
 
-# Update naar sheets
+# Altijd data naar sheets sturen voor live updates
 sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag)
 
 # ====================== UI ======================
@@ -133,6 +139,10 @@ try:
     st.dataframe(df_full.tail(10), use_container_width=True, hide_index=True)
 except:
     st.info("Historiek laden...")
+
+if st.button("🔄 Reset Oogst"):
+    st.session_state.start_kwh_dag = None
+    st.rerun()
 
 time.sleep(2)
 st.rerun()

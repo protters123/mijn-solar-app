@@ -6,12 +6,11 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v7.1 - Historiek & Weer Fix
+# SOLAR PIEK PRO v7.2 - URL & Emoji Fix
 # ==========================================
 
-# CONTROLEER DEZE ID: Het moet de ID zijn uit je Google Sheet URL
-SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+# VOLLEDIGE URL'S (Hardcoded om fouten te voorkomen)
+CSV_URL = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhiYefAqGxI8YXZ0Jm4UqSo2pQ6pO6Ip6ciRGEEWQdXaXl14XR7L83G1ivg0f9VV2r/exec"
 
 PUBLIEK_IP = "94.110.235.108"
@@ -39,13 +38,10 @@ all_time_peak = 3729.0
 df_display = pd.DataFrame()
 
 try:
-    # Forceer inladen van de CSV
     df_raw = pd.read_csv(CSV_URL, header=0)
-    # Filter alleen de eerste 6 kolommen om rommel te voorkomen
     df_full = df_raw.iloc[:, :6]
     df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag']
     
-    # ATP Berekenen
     atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
     if atp > 0: all_time_peak = atp
 
@@ -83,11 +79,11 @@ def fetch_hw_data(url):
 def get_weather():
     try:
         r = requests.get("https://wttr.in|%C|%h&m&lang=nl", timeout=10)
-        p = r.text.strip().split('|')
-        t_clean = p[0].replace("Â", "").replace("C", "").replace("+", "").strip()
+        parts = r.text.strip().split('|')
+        t_clean = parts[0].replace("Â", "").replace("C", "").replace("+", "").strip()
         temp = f"{t_clean}°C"
-        desc = p[1].strip()
-        hum = p[2].strip()
+        desc = parts[1].strip()
+        hum = parts[2].strip()
         d = desc.lower()
         icon = "☀️" if any(x in d for x in ["zon","helder"]) else "⛅" if "licht" in d else "☁️" if "bewolkt" in d else "🌧️" if "regen" in d else "🌤️"
         return temp, desc, hum, icon
@@ -113,16 +109,13 @@ sla_naar_sheets(val_s, val_g, st.session_state.p_total_peak, oogst_vandaag, st.s
 st.title("☀️ Solar Piek PRO")
 st.caption(f"📍 Borgloon • {vandaag_nl} • {nu.strftime('%H:%M')}")
 
-# WEER SECTIE
-try:
-    temp, desc, hum, icon = get_weather()
-    w1, w2, w3 = st.columns(3)
-    with w1: st.metric("🌡️ Temperatuur", temp)
-    with w2: 
-        st.markdown(f"**{desc}**")
-        st.markdown(f"## {icon}")
-    with w3: st.metric("💧 Vochtigheid", hum)
-except: pass
+temp, desc, hum, icon = get_weather()
+w1, w2, w3 = st.columns(3)
+with w1: st.metric("🌡️ Temperatuur", temp)
+with w2: 
+    st.markdown(f"**{desc}**")
+    st.markdown(f"### {icon}")
+with w3: st.metric("💧 Vochtigheid", hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)

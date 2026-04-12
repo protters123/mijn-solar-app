@@ -148,7 +148,7 @@ st.subheader("📜 Historiek")
 try:
     df = pd.read_csv(CSV_URL, header=0, usecols=range(6))
     df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']
-    for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag']:
+    for col in ['Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWh']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     df['Datum_dt'] = pd.to_datetime(df['Datum'], format='%d-%m-%Y', errors='coerce')
     df = df.sort_values('Datum_dt', ascending=False).head(15)
@@ -161,7 +161,7 @@ except:
 if st.button("🔄 Reset Oogst vandaag", type="secondary"):
     st.session_state.start_kwh_dag = None
     st.success("Startwaarde gereset → refresh de pagina")
-    time.sleep(1)
+    time.sleep(2)
     st.rerun()
 
 time.sleep(5)

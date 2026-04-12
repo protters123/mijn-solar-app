@@ -11,7 +11,7 @@ import pytz
 
 # Herstel van de originele werkende URL's
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://docs.google.com{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyhiYefAqGxI8YXZ0Jm4UqSo2pQ6pO6Ip6ciRGEEWQdXaXl14XR7L83G1ivg0f9VV2r/exec"
 
 PUBLIEK_IP = "94.110.235.108"

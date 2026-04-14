@@ -135,7 +135,7 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W")
 
 # --- HIER IS HET UITKLAPMENU WEER ---
 if not df_display.empty:
-    with st.expander("📊 Historiek & Maandoverzicht"):
+    with st.expander("⚡☀️⚡ Historiek & Maandoverzicht"):
         st.subheader("Maandtotalen")
         st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
         

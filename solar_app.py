@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v12.5 - LIVE MONTH TOTAL
+# SOLAR PIEK PRO v12.6 - DYNAMIC MONTH VIEW
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -22,7 +22,7 @@ st.set_page_config(page_title="Solar Piek PRO", page_icon="☀️", layout="cent
 tz = pytz.timezone('Europe/Brussels')
 nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
-huidige_maand_jaar = nu.strftime('%m-%Y') # Voor de live maand-optelling
+huidige_maand_jaar = nu.strftime('%m-%Y') 
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
 # --- INITIALISATIE ---
@@ -57,37 +57,32 @@ if df_raw is not None:
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
-        # Piek van VANDAAG uit de sheet halen
+        # Piek van vandaag uit de sheet
         vandaag_data = df_full[df_full['Datum'] == vandaag_nl]
         if not vandaag_data.empty:
-            sheet_symo_p = pd.to_numeric(vandaag_data['Symo'], errors='coerce').max()
-            sheet_galvo_p = pd.to_numeric(vandaag_data['Galvo'], errors='coerce').max()
-            sheet_totaal_p = pd.to_numeric(vandaag_data['Totaal'], errors='coerce').max()
-            
-            if sheet_symo_p > st.session_state.p_symo_peak: st.session_state.p_symo_peak = sheet_symo_p
-            if sheet_galvo_p > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = sheet_galvo_p
-            if sheet_totaal_p > st.session_state.p_total_peak: st.session_state.p_total_peak = sheet_totaal_p
+            st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, pd.to_numeric(vandaag_data['Symo'], errors='coerce').max())
+            st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, pd.to_numeric(vandaag_data['Galvo'], errors='coerce').max())
+            st.session_state.p_total_peak = max(st.session_state.p_total_peak, pd.to_numeric(vandaag_data['Totaal'], errors='coerce').max())
 
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
-        df_sorted = df_full.sort_values('temp_date', ascending=False)
-
-        # Maandoverzicht voorbereiden (zonder de rij van vandaag om dubbel tellen te voorkomen)
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
-        
-        # We halen de data van vandaag even uit de historische optelling
+
+        # Maandoverzicht (Historiek)
         df_historiek = df_full[df_full['Datum'] != vandaag_nl]
         monthly_summary = df_historiek.groupby('Maand')['Oogst/dag'].sum().reset_index()
 
+        # Bepaal gisteren voor startwaarde
+        df_sorted = df_full.sort_values('temp_date', ascending=False)
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
-            val_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
-            if val_gisteren > 0: stand_gisteren = float(val_gisteren)
+            stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
 
-        df_display = df_sorted.drop(columns=['temp_date']).head(15)
+        # --- FILTER VOOR HUIDIGE MAAND ---
+        df_display = df_sorted[df_sorted['Maand'] == huidige_maand_jaar].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
-# ====================== LIVE DATA ======================
+# ====================== LIVE DATA OPHALEN ======================
 def fetch_hw_data(url):
     try:
         r = requests.get(url, timeout=1.5).json()
@@ -107,37 +102,34 @@ if st.session_state.start_kwh_dag is None:
 
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
-# --- LIVE MAAND UPDATE ---
-# We voegen de live oogst van vandaag toe aan de juiste maand in het overzicht
+# Live Maand-totaal bijwerken
 if not monthly_summary.empty:
     if huidige_maand_jaar in monthly_summary['Maand'].values:
         monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
     else:
-        # Als de maand nog niet bestaat (begin van de maand), voeg hem toe
         nieuwe_rij = pd.DataFrame({'Maand': [huidige_maand_jaar], 'Oogst/dag': [oogst_vandaag]})
         monthly_summary = pd.concat([monthly_summary, nieuwe_rij], ignore_index=True)
-    
     monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
 
-# Piek updates
-if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
-if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
-if val_t > st.session_state.p_total_peak: st.session_state.p_total_peak = val_t
+# Pieken bijwerken
+st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
+st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
+st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
 
 @st.cache_data(ttl=3600)
 def get_weather():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=3)
         p = r.text.strip().split('|')
-        return p, p, p, "🌤️"
-    except: return "12°C", "Bewolkt", "80%", "⛅"
+        return p, p, p
+    except: return "12°C", "Onbekend", "80%"
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-temp, cond, hum, icon = get_weather()
+temp, cond, hum = get_weather()
 w1, w2, w3 = st.columns(3)
 w1.metric("🌡️ Temp", temp)
-w2.metric(f"{icon} Weer", cond)
+w2.metric("🌤️ Weer", cond)
 w3.metric("💧 Vocht", hum)
 
 st.divider()
@@ -155,12 +147,13 @@ with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_sy
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
-if not df_display.empty:
+if not monthly_summary.empty:
     with st.expander("📊 Historiek & Maandoverzicht"):
-        st.subheader("Maandtotalen (Inclusief vandaag)")
+        st.subheader(f"Maandtotalen")
         st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
         st.divider()
-        st.subheader("Laatste 15 dagen")
+        # Toon enkel rijen van de huidige maand (bijv. April)
+        st.subheader(f"Dagoogst {nu.strftime('%B %Y')}")
         st.dataframe(df_display, hide_index=True, use_container_width=True)
 
 time.sleep(1)

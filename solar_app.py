@@ -11,7 +11,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
+WEBAPP_URL = "https://google.com"
 
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
@@ -62,15 +62,9 @@ if df_raw is not None:
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
-               # Maandoverzicht FIX
+        # Maandoverzicht
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
-        
-        # Zorg dat de oogst-kolom echt een getal is (vervang komma door punt indien nodig)
-        df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
-        
-        # Groepeer en tel op
-        monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
-        monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
+        monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index().sort_values('Maand', ascending=False)
 
         # Gisteren stand
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]

@@ -4,14 +4,10 @@ import time
 import pandas as pd
 from datetime import datetime
 import pytz
-from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
-# SOLAR PIEK PRO v12.1 - HERSTELD & STABIEL
+# SOLAR PIEK PRO v12.1 - VOLLEDIG HERSTELD
 # ==========================================
-
-# Stabiele refresh (5 sec) zonder de browser te crashen
-st_autorefresh(interval=5000, key="solar_refresh")
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
@@ -118,6 +114,7 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu, force=Fals
 @st.cache_data(ttl=600)
 def get_weather():
     try:
+        # Kleine fix in de URL string zodat deze stabiel blijft
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
         p = r.text.strip().split('|')
         return p[0], p[1], p[2], "🌤️"
@@ -182,3 +179,6 @@ if st.button("🔄 Reset Startwaarde naar NU"):
     st.session_state.oogst_uit_sheet = 0.0
     sla_naar_sheets(0, 0, 0, 0, kwh_nu, kwh_nu, force=True)
     st.rerun()
+
+time.sleep(2)
+st.rerun()

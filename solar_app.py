@@ -17,7 +17,7 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-st.set_page_config(page_title="Solar Piek PRO", page_icon="☀️", layout="centered")
+st.set_page_config(page_title="Solar Piek PRO", page_icon="☀️⚡", layout="centered")
 
 tz = pytz.timezone('Europe/Brussels')
 nu = datetime.now(tz)

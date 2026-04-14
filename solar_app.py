@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v12.7 - SYNC HERSTELD
+# SOLAR PIEK PRO v12.8 - ROUNDING UPDATE
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -56,7 +56,6 @@ if df_raw is not None:
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
-        # Piek van vandaag uit de sheet
         vandaag_data = df_full[df_full['Datum'] == vandaag_nl]
         if not vandaag_data.empty:
             st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, pd.to_numeric(vandaag_data['Symo'], errors='coerce').max())
@@ -78,7 +77,7 @@ if df_raw is not None:
         df_display = df_sorted[df_sorted['Maand'] == huidige_maand_jaar].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
-# ====================== FUNCTIES (INCLUSIEF SYNC) ======================
+# ====================== LIVE DATA OPHALEN ======================
 def fetch_hw_data(url):
     try:
         r = requests.get(url, timeout=1.5).json()
@@ -91,7 +90,6 @@ def fetch_hw_data(url):
 
 def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
     nu_ts = time.time()
-    # Sync om de 30 seconden
     if (nu_ts - st.session_state.last_sheet_update > 30):
         try:
             payload = {"datum": vandaag_nl, "symo": int(s_peak), "galvo": int(g_peak), "totaal": int(t_peak), 
@@ -106,7 +104,7 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=3)
         p = r.text.strip().split('|')
-        return p[0], p[1], p[2]
+        return p, p, p
     except: return "12°C", "Onbekend", "80%"
 
 # ====================== LIVE DATA & SYNC ======================
@@ -117,9 +115,9 @@ val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 if st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = stand_gisteren if stand_gisteren else kwh_nu
 
-oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
+# Hier ronden we de oogst af op 1 decimaal voor weergave en opslag
+oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 1)
 
-# Pieken & Live Maand Update
 st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
@@ -127,7 +125,6 @@ st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
 if not monthly_summary.empty and huidige_maand_jaar in monthly_summary['Maand'].values:
     monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
 
-# --- NU WORDT DE DATA WEER ECHT VERSTUURD ---
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
@@ -145,7 +142,8 @@ st.progress(min(val_t / 8000, 1.0))
 st.caption(f"🔄 Laatste sync naar Google Sheets: **{st.session_state.last_sync_time}**")
 
 ca, cb = st.columns(2)
-with ca: st.metric("📈 Oogst vandaag", f"{oogst_vandaag:.3f} kWh")
+# De metric toont nu ook netjes 1 decimaal
+with ca: st.metric("📈 Oogst vandaag", f"{oogst_vandaag:.1f} kWh")
 with cb: st.metric("🏆 All-time Piek", f"{max(all_time_peak, st.session_state.p_total_peak):,.0f} W")
 
 st.divider()
@@ -157,10 +155,11 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 if not monthly_summary.empty:
     with st.expander("📊 Historiek & Maandoverzicht"):
         st.subheader("Maandtotalen")
-        st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
+        # Afronding ook in de overzichtstabellen toepassen
+        st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
         st.divider()
         st.subheader(f"Dagoogst {nu.strftime('%B %Y')}")
-        st.dataframe(df_display, hide_index=True, use_container_width=True)
+        st.dataframe(df_display.round(1), hide_index=True, use_container_width=True)
 
 time.sleep(1)
 st.rerun()

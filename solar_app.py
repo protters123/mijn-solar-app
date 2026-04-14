@@ -6,11 +6,11 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v12.2 - MAAND FIX + SPEED
+# SOLAR PIEK PRO v12.2 - REPAIRED LINKS
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
@@ -60,7 +60,6 @@ if df_raw is not None:
 
         # --- MAANDOVERZICHT FIX ---
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
-        # Dwing numerieke waarden af voor correcte optelling
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
@@ -128,13 +127,12 @@ with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_sy
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W")
 
-# HIER ZIT JE OVERZICHT NU (Klik om te openen)
-if not df_display.empty:
-    with st.expander("📊 Historiek & Maandoverzicht"):
-        st.subheader("Maandtotalen")
-        st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
-        st.subheader("Laatste 15 dagen")
-        st.dataframe(df_display, hide_index=True, use_container_width=True)
+st.divider()
+st.subheader("📊 Maandtotalen")
+st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
+
+st.subheader("📜 Laatste 15 dagen")
+st.dataframe(df_display, hide_index=True, use_container_width=True)
 
 time.sleep(1)
 st.rerun()

@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v12.1 - SNELHEID UPDATE
+# SOLAR PIEK PRO v12.2 - MAAND FIX + SPEED
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -30,43 +30,41 @@ if 'initialized' not in st.session_state:
     st.session_state.p_total_peak = 0.0
     st.session_state.p_symo_peak = 0.0
     st.session_state.start_kwh_dag = None
-    st.session_state.oogst_uit_sheet = 0.0 
     st.session_state.last_sync_time = "Nog geen sync"
     st.session_state.last_sheet_update = 0
     st.session_state.initialized = True
 
-# ====================== DATA LADEN (SNEL) ======================
-all_time_peak = 3729.0
-
-@st.cache_data(ttl=60) # Iets langer cachen voor snelheid
+# ====================== DATA LADEN ======================
+@st.cache_data(ttl=60)
 def load_historical_data(url):
     try:
-        # Cache buster per minuut in plaats van per seconde
         return pd.read_csv(f"{url}&ts={int(time.time()/60)}", header=0, decimal=",")
     except: return None
 
 df_raw = load_historical_data(CSV_URL)
-
-# Verwerking van data (alleen als de cache verlopen is)
 df_display = pd.DataFrame()
 monthly_summary = pd.DataFrame()
 stand_gisteren = None
+all_time_peak = 3729.0
 
 if df_raw is not None:
     try:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
+        
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
-        # Maandoverzicht
+        # --- MAANDOVERZICHT FIX ---
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
-        monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index().sort_values('Maand', ascending=False)
+        # Dwing numerieke waarden af voor correcte optelling
+        df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
+        monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
+        monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
 
-        # Gisteren stand
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
@@ -74,10 +72,9 @@ if df_raw is not None:
         df_display = df_sorted.drop(columns=['temp_date']).head(15)
     except: pass
 
-# ====================== FUNCTIES ======================
+# ====================== LIVE DATA OPHALEN ======================
 def fetch_hw_data(url):
     try:
-        # Timeout naar 1.5 seconde voor snelheid
         r = requests.get(url, timeout=1.5).json()
         power = round(abs(float(r.get('active_power_w', 0))))
         kwh = float(r.get('total_power_export_kwh', 0))
@@ -86,27 +83,6 @@ def fetch_hw_data(url):
         return (power if power >= 10 else 0), kwh, "🟢"
     except: return 0, 0, "🔴"
 
-def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
-    nu_ts = time.time()
-    # Alleen syncen als er echt iets veranderd is OF na 60 seconden
-    if (nu_ts - st.session_state.last_sheet_update > 60):
-        try:
-            payload = {"datum": vandaag_nl, "symo": int(s_peak), "galvo": int(g_peak), "totaal": int(t_peak), 
-                       "oogst": float(oogst), "start_kwh": float(start_kwh), "kwh_nu": float(kwh_nu), "actie": "update"}
-            requests.post(WEBAPP_URL, json=payload, timeout=2)
-            st.session_state.last_sheet_update = nu_ts
-            st.session_state.last_sync_time = datetime.now(tz).strftime('%H:%M:%S')
-        except: pass
-
-@st.cache_data(ttl=3600) # Weer hoeft maar 1x per uur
-def get_weather():
-    try:
-        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=3)
-        p = r.text.strip().split('|')
-        return p[0], p[1], p[2]
-    except: return "12°C", "Bewolkt", "80%"
-
-# ====================== LIVE DATA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
@@ -116,14 +92,20 @@ if st.session_state.start_kwh_dag is None:
 
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
+# Piekwaardes bijwerken
 if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
 if val_t > st.session_state.p_total_peak: st.session_state.p_total_peak = val_t
 
-# Sync op achtergrond
-if st.session_state.start_kwh_dag:
-    sla_naar_sheets(st.session_state.p_symo_peak, 0, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
+# Weer data
+@st.cache_data(ttl=3600)
+def get_weather():
+    try:
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=3)
+        p = r.text.strip().split('|')
+        return p[0], p[1], p[2]
+    except: return "12°C", "Bewolkt", "80%"
 
-# ====================== UI ======================
+# ====================== UI WEERGAVE ======================
 st.title("☀️ Solar Piek PRO")
 temp, cond, hum = get_weather()
 w1, w2, w3 = st.columns(3)
@@ -146,11 +128,13 @@ with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_sy
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W")
 
+# HIER ZIT JE OVERZICHT NU (Klik om te openen)
 if not df_display.empty:
     with st.expander("📊 Historiek & Maandoverzicht"):
-        st.dataframe(monthly_summary, hide_index=True)
-        st.dataframe(df_display, hide_index=True)
+        st.subheader("Maandtotalen")
+        st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
+        st.subheader("Laatste 15 dagen")
+        st.dataframe(df_display, hide_index=True, use_container_width=True)
 
-# Korte pauze voor de volgende refresh
 time.sleep(1)
 st.rerun()

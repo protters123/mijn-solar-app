@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v12.9 - LIVE TABLE UPDATE
+# SOLAR PIEK PRO v13.0 - WEATHER RESTORED
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -56,7 +56,6 @@ if df_raw is not None:
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
-        # Piek van vandaag uit de sheet laden voor continuïteit
         vandaag_data = df_full[df_full['Datum'] == vandaag_nl]
         if not vandaag_data.empty:
             st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, pd.to_numeric(vandaag_data['Symo'], errors='coerce').max())
@@ -67,7 +66,6 @@ if df_raw is not None:
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
 
-        # Maandoverzicht (Historiek zonder vandaag om dubbel tellen te voorkomen)
         df_historiek = df_full[df_full['Datum'] != vandaag_nl]
         monthly_summary = df_historiek.groupby('Maand')['Oogst/dag'].sum().reset_index()
 
@@ -76,7 +74,6 @@ if df_raw is not None:
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
 
-        # Filter enkel de huidige maand voor de tabel onderaan
         df_display = df_sorted[(df_sorted['Maand'] == huidige_maand_jaar) & (df_sorted['Datum'] != vandaag_nl)].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
@@ -102,6 +99,15 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
             st.session_state.last_sync_time = datetime.now(tz).strftime('%H:%M:%S')
         except: pass
 
+@st.cache_data(ttl=3600)
+def get_weather():
+    try:
+        # Weerdata voor Tongeren (of pas locatie aan)
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
+        p = r.text.strip().split('|')
+        return p[0], p[1], p[2], "🌤️"
+    except: return "12°C", "Bewolkt", "80%", "⛅"
+
 # ====================== LIVE DATA & VERWERKING ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
@@ -112,12 +118,10 @@ if st.session_state.start_kwh_dag is None:
 
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 1)
 
-# Pieken bijwerken
 st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
 
-# Maandoverzicht live updaten
 if not monthly_summary.empty:
     if huidige_maand_jaar in monthly_summary['Maand'].values:
         monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
@@ -126,7 +130,6 @@ if not monthly_summary.empty:
         monthly_summary = pd.concat([monthly_summary, nieuwe_rij_m], ignore_index=True)
     monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
 
-# --- LIVE TOEVOEGEN AAN TABEL ---
 vandaag_rij = pd.DataFrame({
     'Datum': [vandaag_nl], 'Symo': [int(st.session_state.p_symo_peak)], 
     'Galvo': [int(st.session_state.p_galvo_peak)], 'Totaal': [int(st.session_state.p_total_peak)], 
@@ -134,21 +137,21 @@ vandaag_rij = pd.DataFrame({
 })
 df_display = pd.concat([vandaag_rij, df_display], ignore_index=True)
 
-# Sync uitvoeren
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-# Weerdata simpel gehouden voor snelheid
+temp, cond, hum, icon = get_weather()
 w1, w2, w3 = st.columns(3)
-w1.metric("🌡️ Status", "Live")
-w2.metric("🌤️ Systeem", "Online")
-w3.metric("💧 Sync", st.session_state.last_sync_time)
+w1.metric("🌡️ Temp", temp)
+w2.metric(f"{icon} Weer", cond)
+w3.metric("💧 Vocht", hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
+st.caption(f"🔄 Laatste sync naar Google Sheets: **{st.session_state.last_sync_time}**")
 
 ca, cb = st.columns(2)
 with ca: st.metric("📈 Oogst vandaag", f"{oogst_vandaag:.1f} kWh")

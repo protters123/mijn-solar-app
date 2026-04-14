@@ -4,10 +4,14 @@ import time
 import pandas as pd
 from datetime import datetime
 import pytz
+from streamlit_autorefresh import st_autorefresh  # Nieuw: voor stabiele refresh
 
 # ==========================================
-# SOLAR PIEK PRO v12.1 - STATUS DOTS + SYNC
+# SOLAR PIEK PRO v12.2 - STABLE REFRESH
 # ==========================================
+
+# Auto-refresh elke 5 seconden (5000ms). Voorkomt 'memory leaks' van st.rerun()
+st_autorefresh(interval=5000, key="solar_refresh")
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
@@ -41,10 +45,11 @@ df_display = pd.DataFrame()
 df_monthly = pd.DataFrame()
 stand_gisteren = None
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=30) # Verhoogd naar 30s om Google Sheets minder te belasten
 def load_data(url):
     try:
-        return pd.read_csv(f"{url}&ts={time.time()}", header=0, decimal=",")
+        # Cache busting met timestamp
+        return pd.read_csv(f"{url}&ts={int(time.time()/30)}", header=0, decimal=",")
     except: return None
 
 df_raw = load_data(CSV_URL)
@@ -59,17 +64,20 @@ if df_raw is not None:
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
+        # Maandoverzicht
         df_monthly = df_full.copy()
         df_monthly['Maand'] = df_monthly['temp_date'].dt.strftime('%m-%Y')
         df_monthly['Oogst/dag'] = pd.to_numeric(df_monthly['Oogst/dag'], errors='coerce')
         monthly_summary = df_monthly.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
 
+        # Gisteren bepalen
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
             val_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
             if val_gisteren > 1000: stand_gisteren = float(val_gisteren)
 
+        # Vandaag data uit sheet halen
         vandaag_df = df_full[df_full['Datum'] == vandaag_nl].copy()
         if not vandaag_df.empty:
             sheet_piek = pd.to_numeric(vandaag_df['Totaal'], errors='coerce').max()
@@ -92,18 +100,18 @@ if df_raw is not None:
 # ====================== FUNCTIES ======================
 def fetch_hw_data(url):
     try:
-        r = requests.get(url, timeout=3).json()
+        r = requests.get(url, timeout=2).json() # Snelle timeout voor responsiviteit
         power = round(abs(float(r.get('active_power_w', 0))))
         kwh = float(r.get('total_power_export_kwh', 0))
         if kwh == 0:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
-        # Status bolletje groen als er succesvol data is opgehaald
         return (power if power >= 10 else 0), kwh, "🟢"
-    except: return 0, 0, "🔴" # Rood bolletje bij fout
+    except: return 0, 0, "🔴"
 
 def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu, force=False):
     nu_ts = time.time()
-    if force or (nu_ts - st.session_state.last_sheet_update > 25):
+    # Sync interval: minimaal 30 seconden tussen updates
+    if force or (nu_ts - st.session_state.last_sheet_update > 30):
         try:
             payload = {"datum": vandaag_nl, "symo": int(s_peak), "galvo": int(g_peak), "totaal": int(t_peak), 
                        "oogst": float(oogst), "start_kwh": float(start_kwh), "kwh_nu": float(kwh_nu), "actie": "update"}
@@ -112,13 +120,13 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu, force=Fals
             st.session_state.last_sync_time = datetime.now(tz).strftime('%H:%M:%S')
         except: pass
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=900) # Weer hoeft maar elke 15 min ververst te worden
 def get_weather():
     try:
-        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=10)
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
-        return p[0].replace("+",""), p[1], p[2], "🌤️"
-    except: return "12°C", "Onbekend", "80%", "⛅"
+        return p[0], p[1], p[2]
+    except: return "12°C", "Onbekend", "80%"
 
 # ====================== LIVE DATA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -139,11 +147,11 @@ if st.session_state.start_kwh_dag:
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-t, d, h, icon = get_weather()
+temp, cond, hum = get_weather()
 w1, w2, w3 = st.columns(3)
-w1.metric("🌡️ Temp", t)
-w2.metric("🌤️ Weer", d)
-w3.metric("💧 Vocht", h)
+w1.metric("🌡️ Temp", temp)
+w2.metric("🌤️ Weer", cond)
+w3.metric("💧 Vocht", hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
@@ -156,7 +164,6 @@ with cb: st.metric("🏆 All Time Peak", f"{max(all_time_peak, st.session_state.
 
 st.divider()
 c1, c2, c3 = st.columns(3)
-# Bolletjes hersteld in de titels van de omvormers
 with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", "Piek: 0 W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
@@ -180,6 +187,3 @@ if st.button("🔄 Reset Startwaarde naar NU"):
     st.session_state.oogst_uit_sheet = 0.0
     sla_naar_sheets(0, 0, 0, 0, kwh_nu, kwh_nu, force=True)
     st.rerun()
-
-time.sleep(2)
-st.rerun()

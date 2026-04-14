@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.1 - WEATHER UI RESTORED
+# SOLAR PIEK PRO v13.2 - WEATHER ICON FIX
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -102,16 +102,23 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
 @st.cache_data(ttl=3600)
 def get_weather():
     try:
-        # Haalt temperatuur, beschrijving en vochtigheid op
+        # Haalt weerdata op voor Tongeren
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
-        # Bepaalt icoon op basis van de tekst
-        icoon = "🌤️"
-        if "regen" in p[1].lower(): icoon = "🌧️"
-        elif "bewolkt" in p[1].lower(): icoon = "☁️"
-        elif "onweer" in p[1].lower(): icoon = "⛈️"
-        return p[0], p[1], p[2], icoon
-    except: return "12°C", "Onbekend", "80%", "⛅"
+        temp_str, desc, hum = p[0], p[1], p[2]
+        
+        # Verbeterde icoon-logica
+        desc_l = desc.lower()
+        icoon = "☀️" # Standaard zonnig
+        if "regen" in desc_l or "buien" in desc_l: icoon = "🌧️"
+        elif "bewolkt" in desc_l or "cloudy" in desc_l: icoon = "☁️"
+        elif "zon" in desc_l or "helder" in desc_l or "clear" in desc_l: icoon = "☀️"
+        elif "onweer" in desc_l: icoon = "⛈️"
+        elif "mist" in desc_l: icoon = "🌫️"
+        else: icoon = "🌤️" # Half bewolkt als we het niet zeker weten
+            
+        return temp_str, desc, hum, icoon
+    except: return "12°C", "Onbewolkt", "80%", "☀️"
 
 # ====================== LIVE DATA & VERWERKING ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -148,7 +155,6 @@ if st.session_state.start_kwh_dag:
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
 
-# Hier worden de live weergegevens getoond
 t_val, desc_val, hum_val, icon_val = get_weather()
 w1, w2, w3 = st.columns(3)
 w1.metric("🌡️ Temp", t_val)

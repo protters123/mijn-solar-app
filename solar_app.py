@@ -62,9 +62,15 @@ if df_raw is not None:
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
-        # Maandoverzicht
+               # Maandoverzicht FIX
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
-        monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index().sort_values('Maand', ascending=False)
+        
+        # Zorg dat de oogst-kolom echt een getal is (vervang komma door punt indien nodig)
+        df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
+        
+        # Groepeer en tel op
+        monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
+        monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
 
         # Gisteren stand
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]

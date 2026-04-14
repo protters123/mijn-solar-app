@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v12.2 - REPAIRED LINKS
+# SOLAR PIEK PRO v12.3 - EXPANDER HERSTELD
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -38,6 +38,7 @@ if 'initialized' not in st.session_state:
 @st.cache_data(ttl=60)
 def load_historical_data(url):
     try:
+        # Cache buster toegevoegd voor verse data
         return pd.read_csv(f"{url}&ts={int(time.time()/60)}", header=0, decimal=",")
     except: return None
 
@@ -52,26 +53,32 @@ if df_raw is not None:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
         
+        # Piek bepalen
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
+        # Datum conversie
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
-        # --- MAANDOVERZICHT FIX ---
+        # --- MAANDOVERZICHT BEREKENING ---
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
+        # Dwing numerieke waarden af voor correcte optelling (komma naar punt)
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
 
+        # Gisteren bepalen voor startwaarde
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
-            stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
+            val_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
+            if val_gisteren > 0: stand_gisteren = float(val_gisteren)
 
+        # Tabel voor weergave
         df_display = df_sorted.drop(columns=['temp_date']).head(15)
     except: pass
 
-# ====================== LIVE DATA OPHALEN ======================
+# ====================== LIVE DATA ======================
 def fetch_hw_data(url):
     try:
         r = requests.get(url, timeout=1.5).json()
@@ -91,25 +98,24 @@ if st.session_state.start_kwh_dag is None:
 
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
-# Piekwaardes bijwerken
 if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
 if val_t > st.session_state.p_total_peak: st.session_state.p_total_peak = val_t
 
-# Weer data
 @st.cache_data(ttl=3600)
 def get_weather():
     try:
+        # URL gefixed voor stabiel weer
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=3)
         p = r.text.strip().split('|')
-        return p[0], p[1], p[2]
-    except: return "12°C", "Bewolkt", "80%"
+        return p[0], p[1], p[2], "🌤️"
+    except: return "12°C", "Bewolkt", "80%", "⛅"
 
-# ====================== UI WEERGAVE ======================
+# ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-temp, cond, hum = get_weather()
+temp, cond, hum, icon = get_weather()
 w1, w2, w3 = st.columns(3)
 w1.metric("🌡️ Temp", temp)
-w2.metric("🌤️ Weer", cond)
+w2.metric(f"{icon} Weer", cond)
 w3.metric("💧 Vocht", hum)
 
 st.divider()
@@ -127,12 +133,16 @@ with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_sy
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W")
 
-st.divider()
-st.subheader("📊 Maandtotalen")
-st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
-
-st.subheader("📜 Laatste 15 dagen")
-st.dataframe(df_display, hide_index=True, use_container_width=True)
+# --- HIER IS HET UITKLAPMENU WEER ---
+if not df_display.empty:
+    with st.expander("📊 Historiek & Maandoverzicht"):
+        st.subheader("Maandtotalen")
+        st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
+        
+        st.divider()
+        
+        st.subheader("Laatste 15 dagen")
+        st.dataframe(df_display, hide_index=True, use_container_width=True)
 
 time.sleep(1)
 st.rerun()

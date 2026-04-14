@@ -11,7 +11,7 @@ import pytz
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://google.com"
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"

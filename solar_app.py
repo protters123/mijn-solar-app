@@ -111,7 +111,7 @@ def get_weather():
     except: return "12°C", "Bewolkt", "80%", "⛅"
 
 # ====================== UI ======================
-st.title("☀️ Solar Piek PRO")
+st.title("☀️⚡ Solar Piek PRO")
 temp, cond, hum, icon = get_weather()
 w1, w2, w3 = st.columns(3)
 w1.metric("🌡️ Temp", temp)

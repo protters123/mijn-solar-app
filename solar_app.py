@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v12.4 - PEAK PERSISTENCE
+# SOLAR PIEK PRO v12.5 - LIVE MONTH TOTAL
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -22,6 +22,7 @@ st.set_page_config(page_title="Solar Piek PRO", page_icon="☀️", layout="cent
 tz = pytz.timezone('Europe/Brussels')
 nu = datetime.now(tz)
 vandaag_nl = nu.strftime('%d-%m-%Y')
+huidige_maand_jaar = nu.strftime('%m-%Y') # Voor de live maand-optelling
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
 # --- INITIALISATIE ---
@@ -29,7 +30,7 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
     st.session_state.huidige_datum = vandaag_iso
     st.session_state.p_total_peak = 0.0
     st.session_state.p_symo_peak = 0.0
-    st.session_state.p_galvo_peak = 0.0 # Nieuw: Galvo piek geheugen
+    st.session_state.p_galvo_peak = 0.0
     st.session_state.start_kwh_dag = None
     st.session_state.last_sync_time = "Nog geen sync"
     st.session_state.last_sheet_update = 0
@@ -53,11 +54,10 @@ if df_raw is not None:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
         
-        # All time piek uit de hele sheet
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
-        # Piek van VANDAAG uit de sheet halen (voor herstart persistence)
+        # Piek van VANDAAG uit de sheet halen
         vandaag_data = df_full[df_full['Datum'] == vandaag_nl]
         if not vandaag_data.empty:
             sheet_symo_p = pd.to_numeric(vandaag_data['Symo'], errors='coerce').max()
@@ -71,10 +71,13 @@ if df_raw is not None:
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_sorted = df_full.sort_values('temp_date', ascending=False)
 
-        # Maandoverzicht
+        # Maandoverzicht voorbereiden (zonder de rij van vandaag om dubbel tellen te voorkomen)
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
-        monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index().sort_values('Maand', ascending=False)
+        
+        # We halen de data van vandaag even uit de historische optelling
+        df_historiek = df_full[df_full['Datum'] != vandaag_nl]
+        monthly_summary = df_historiek.groupby('Maand')['Oogst/dag'].sum().reset_index()
 
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
@@ -104,7 +107,19 @@ if st.session_state.start_kwh_dag is None:
 
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 3)
 
-# --- PIEK UPDATES ---
+# --- LIVE MAAND UPDATE ---
+# We voegen de live oogst van vandaag toe aan de juiste maand in het overzicht
+if not monthly_summary.empty:
+    if huidige_maand_jaar in monthly_summary['Maand'].values:
+        monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
+    else:
+        # Als de maand nog niet bestaat (begin van de maand), voeg hem toe
+        nieuwe_rij = pd.DataFrame({'Maand': [huidige_maand_jaar], 'Oogst/dag': [oogst_vandaag]})
+        monthly_summary = pd.concat([monthly_summary, nieuwe_rij], ignore_index=True)
+    
+    monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
+
+# Piek updates
 if val_s > st.session_state.p_symo_peak: st.session_state.p_symo_peak = val_s
 if val_g > st.session_state.p_galvo_peak: st.session_state.p_galvo_peak = val_g
 if val_t > st.session_state.p_total_peak: st.session_state.p_total_peak = val_t
@@ -114,7 +129,7 @@ def get_weather():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=3)
         p = r.text.strip().split('|')
-        return p[0], p[1], p[2], "🌤️"
+        return p, p, p, "🌤️"
     except: return "12°C", "Bewolkt", "80%", "⛅"
 
 # ====================== UI ======================
@@ -136,14 +151,13 @@ with cb: st.metric("🏆 All-time Piek", f"{max(all_time_peak, st.session_state.
 
 st.divider()
 c1, c2, c3 = st.columns(3)
-# Hier zijn de pieken nu voor beide omvormers zichtbaar
 with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
 if not df_display.empty:
     with st.expander("📊 Historiek & Maandoverzicht"):
-        st.subheader("Maandtotalen")
+        st.subheader("Maandtotalen (Inclusief vandaag)")
         st.dataframe(monthly_summary, hide_index=True, use_container_width=True)
         st.divider()
         st.subheader("Laatste 15 dagen")

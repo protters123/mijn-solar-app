@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.2 - WEATHER ICON FIX
+# SOLAR PIEK PRO v13.3 - STABIELE REBUILD
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -53,9 +53,11 @@ if df_raw is not None:
     try:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
+        
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak = atp
         
+        # Piek van vandaag uit de sheet laden voor continuïteit
         vandaag_data = df_full[df_full['Datum'] == vandaag_nl]
         if not vandaag_data.empty:
             st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, pd.to_numeric(vandaag_data['Symo'], errors='coerce').max())
@@ -66,6 +68,7 @@ if df_raw is not None:
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
 
+        # Maandoverzicht (Historiek zonder vandaag)
         df_historiek = df_full[df_full['Datum'] != vandaag_nl]
         monthly_summary = df_historiek.groupby('Maand')['Oogst/dag'].sum().reset_index()
 
@@ -74,6 +77,7 @@ if df_raw is not None:
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
 
+        # Filter voor huidige maand tabel
         df_display = df_sorted[(df_sorted['Maand'] == huidige_maand_jaar) & (df_sorted['Datum'] != vandaag_nl)].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
@@ -102,23 +106,10 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
 @st.cache_data(ttl=3600)
 def get_weather():
     try:
-        # Haalt weerdata op voor Tongeren
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
-        temp_str, desc, hum = p[0], p[1], p[2]
-        
-        # Verbeterde icoon-logica
-        desc_l = desc.lower()
-        icoon = "☀️" # Standaard zonnig
-        if "regen" in desc_l or "buien" in desc_l: icoon = "🌧️"
-        elif "bewolkt" in desc_l or "cloudy" in desc_l: icoon = "☁️"
-        elif "zon" in desc_l or "helder" in desc_l or "clear" in desc_l: icoon = "☀️"
-        elif "onweer" in desc_l: icoon = "⛈️"
-        elif "mist" in desc_l: icoon = "🌫️"
-        else: icoon = "🌤️" # Half bewolkt als we het niet zeker weten
-            
-        return temp_str, desc, hum, icoon
-    except: return "12°C", "Onbewolkt", "80%", "☀️"
+        return p[0], p[1], p[2], "🌤️"
+    except: return "12°C", "Onbekend", "80%", "⛅"
 
 # ====================== LIVE DATA & VERWERKING ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -130,31 +121,20 @@ if st.session_state.start_kwh_dag is None:
 
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 1)
 
+# Pieken & Live Maand Update
 st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
 
-if not monthly_summary.empty:
-    if huidige_maand_jaar in monthly_summary['Maand'].values:
-        monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
-    else:
-        nieuwe_rij_m = pd.DataFrame({'Maand': [huidige_maand_jaar], 'Oogst/dag': [oogst_vandaag]})
-        monthly_summary = pd.concat([monthly_summary, nieuwe_rij_m], ignore_index=True)
-    monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
+if not monthly_summary.empty and huidige_maand_jaar in monthly_summary['Maand'].values:
+    monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
 
-vandaag_rij = pd.DataFrame({
-    'Datum': [vandaag_nl], 'Symo': [int(st.session_state.p_symo_peak)], 
-    'Galvo': [int(st.session_state.p_galvo_peak)], 'Totaal': [int(st.session_state.p_total_peak)], 
-    'Oogst/dag': [oogst_vandaag], 'StartKWhdag': [st.session_state.start_kwh_dag], 'KWhdag': [round(kwh_nu, 1)]
-})
-df_display = pd.concat([vandaag_rij, df_display], ignore_index=True)
-
+# Sync uitvoeren
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-
 t_val, desc_val, hum_val, icon_val = get_weather()
 w1, w2, w3 = st.columns(3)
 w1.metric("🌡️ Temp", t_val)
@@ -181,7 +161,9 @@ with st.expander("📊 Historiek & Maandoverzicht"):
     st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
     st.divider()
     st.subheader(f"Dagoogst {nu.strftime('%B %Y')}")
-    st.dataframe(df_display, hide_index=True, use_container_width=True)
+    # Live rij voor vandaag toevoegen aan tabel voor visuele feedback
+    vandaag_rij = pd.DataFrame({'Datum': [vandaag_nl], 'Symo': [st.session_state.p_symo_peak], 'Galvo': [st.session_state.p_galvo_peak], 'Totaal': [st.session_state.p_total_peak], 'Oogst/dag': [oogst_vandaag], 'StartKWhdag': [st.session_state.start_kwh_dag], 'KWhdag': [kwh_nu]})
+    st.dataframe(pd.concat([vandaag_rij, df_display], ignore_index=True).round(1), hide_index=True, use_container_width=True)
 
 time.sleep(1)
 st.rerun()

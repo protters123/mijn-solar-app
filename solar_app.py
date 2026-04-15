@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.5 - BUGFIX NAME ERROR
+# SOLAR PIEK PRO v13.6 - DYNAMIC WEATHER EMOJI
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -47,7 +47,7 @@ df_raw = load_historical_data(CSV_URL)
 df_display = pd.DataFrame()
 monthly_summary = pd.DataFrame()
 stand_gisteren = None
-all_time_peak_sheet = 3729.0 # Hersteld: juiste naam
+all_time_peak_sheet = 3729.0
 
 if df_raw is not None:
     try:
@@ -101,12 +101,27 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
         except: pass
 
 @st.cache_data(ttl=3600)
-def get_weather_stable():
+def get_weather_with_emoji():
     try:
+        # Haalt data op in format: temperatuur|beschrijving|vochtigheid
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
-        return p[0], p[1], p[2], "🌤️"
-    except: return "12°C", "Helder", "80%", "☀️"
+        temp, desc, hum = p[0], p[1], p[2]
+        
+        # Emoji kiezen op basis van beschrijving
+        d = desc.lower()
+        if "zonnig" in d or "helder" in d: emoji = "☀️"
+        elif "licht bewolkt" in d or "half bewolkt" in d: emoji = "🌤️"
+        elif "bewolkt" in d or "overtrokken" in d: emoji = "☁️"
+        elif "regen" in d or "buien" in d: emoji = "🌧️"
+        elif "onweer" in d: emoji = "⛈️"
+        elif "sneeuw" in d: emoji = "❄️"
+        elif "mist" in d: emoji = "🌫️"
+        else: emoji = "⛅" # Standaard icoon
+        
+        return temp, desc, hum, emoji
+    except:
+        return "12°C", "Helder", "80%", "☀️"
 
 # ====================== LIVE DATA & VERWERKING ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -135,10 +150,10 @@ if st.session_state.start_kwh_dag:
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-temp, cond, hum, icon = get_weather_stable()
+temp, cond, hum, weather_emoji = get_weather_with_emoji()
 w1, w2, w3 = st.columns(3)
 w1.metric("🌡️ Temp", temp)
-w2.metric(f"{icon} Weer", cond)
+w2.metric(f"{weather_emoji} Weer", cond)
 w3.metric("💧 Vocht", hum)
 
 st.divider()

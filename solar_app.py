@@ -17,7 +17,7 @@ PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
-st.set_page_config(page_title="Solar Piek PRO", page_icon="☀️", layout="centered")
+st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
 tz = pytz.timezone('Europe/Brussels')
 nu = datetime.now(tz)
@@ -146,7 +146,7 @@ if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
 # ====================== UI ======================
-st.title("☀️ Solar Piek PRO")
+st.title("⚡☀️⚡ Solar Piek PRO")
 w_temp, w_cond, w_hum, w_emoji = get_weather_data()
 colw1, colw2, colw3 = st.columns(3)
 colw1.metric("🌡️ Temp", w_temp)
@@ -159,7 +159,7 @@ st.progress(min(val_t / 8000, 1.0))
 st.caption(f"🔄 Laatste sync naar Google Sheets: **{st.session_state.last_sync_time}**")
 
 ca, cb = st.columns(2)
-with ca: st.metric("📈 Oogst vandaag", f"{oogst_vandaag:.1f} kWh")
+with ca: st.metric("⚡ Oogst vandaag", f"{oogst_vandaag:.1f} kWh")
 with cb: st.metric("🏆 All-time Piek", f"{max(all_time_peak_sheet, st.session_state.p_total_peak):,.0f} W")
 
 st.divider()

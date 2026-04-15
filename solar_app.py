@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.8 - FINAL WEATHER UI
+# SOLAR PIEK PRO v13.9 - MONTH SORT UPDATE
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -65,8 +65,13 @@ if df_raw is not None:
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
+        
+        # Maandoverzicht - NU GESORTEERD OP DATUM (Nieuwste eerst)
         df_hist = df_full[df_full['Datum'] != vandaag_nl]
         monthly_summary = df_hist.groupby('Maand')['Oogst/dag'].sum().reset_index()
+        monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
+        monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
+
         df_sorted = df_full.sort_values('temp_date', ascending=False)
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
@@ -126,8 +131,16 @@ st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
 
-if not monthly_summary.empty and huidige_maand_jaar in monthly_summary['Maand'].values:
-    monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
+# Maandoverzicht updaten en opnieuw sorteren
+if not monthly_summary.empty:
+    if huidige_maand_jaar in monthly_summary['Maand'].values:
+        monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
+    else:
+        nieuwe_rij_m = pd.DataFrame({'Maand': [huidige_maand_jaar], 'Oogst/dag': [oogst_vandaag]})
+        monthly_summary = pd.concat([monthly_summary, nieuwe_rij_m], ignore_index=True)
+    
+    monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
+    monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
 
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
@@ -137,7 +150,7 @@ st.title("☀️ Solar Piek PRO")
 w_temp, w_cond, w_hum, w_emoji = get_weather_data()
 colw1, colw2, colw3 = st.columns(3)
 colw1.metric("🌡️ Temp", w_temp)
-colw2.metric(f"☀️ {w_cond}", w_emoji) # Conditie in de titel, Emoji groot eronder
+colw2.metric(f"☀️ {w_cond}", w_emoji) 
 colw3.metric("💧 Vocht", w_hum)
 
 st.divider()

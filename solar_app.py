@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.6 - DYNAMIC WEATHER EMOJI
+# SOLAR PIEK PRO v13.8 - FINAL WEATHER UI
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -53,7 +53,6 @@ if df_raw is not None:
     try:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
-        
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak_sheet = atp
         
@@ -66,15 +65,12 @@ if df_raw is not None:
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
-
         df_hist = df_full[df_full['Datum'] != vandaag_nl]
         monthly_summary = df_hist.groupby('Maand')['Oogst/dag'].sum().reset_index()
-
         df_sorted = df_full.sort_values('temp_date', ascending=False)
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
-
         df_display = df_sorted[(df_sorted['Maand'] == huidige_maand_jaar) & (df_sorted['Datum'] != vandaag_nl)].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
@@ -100,28 +96,22 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
             st.session_state.last_sync_time = datetime.now(tz).strftime('%H:%M:%S')
         except: pass
 
-@st.cache_data(ttl=3600)
-def get_weather_with_emoji():
+@st.cache_data(ttl=1800)
+def get_weather_data():
     try:
-        # Haalt data op in format: temperatuur|beschrijving|vochtigheid
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
-        temp, desc, hum = p[0], p[1], p[2]
-        
-        # Emoji kiezen op basis van beschrijving
-        d = desc.lower()
-        if "zonnig" in d or "helder" in d: emoji = "☀️"
-        elif "licht bewolkt" in d or "half bewolkt" in d: emoji = "🌤️"
-        elif "bewolkt" in d or "overtrokken" in d: emoji = "☁️"
-        elif "regen" in d or "buien" in d: emoji = "🌧️"
-        elif "onweer" in d: emoji = "⛈️"
-        elif "sneeuw" in d: emoji = "❄️"
-        elif "mist" in d: emoji = "🌫️"
-        else: emoji = "⛅" # Standaard icoon
-        
-        return temp, desc, hum, emoji
-    except:
-        return "12°C", "Helder", "80%", "☀️"
+        temp, cond, hum = p[0], p[1], p[2]
+        c = cond.lower()
+        emoji = "☀️"
+        if "regen" in c or "buien" in c: emoji = "🌧️"
+        elif "bewolkt" in c or "overtrokken" in c: emoji = "☁️"
+        elif "onweer" in c: emoji = "⛈️"
+        elif "mist" in c: emoji = "🌫️"
+        elif "helder" in c or "zonnig" in c: emoji = "☀️"
+        else: emoji = "🌤️"
+        return temp, cond, hum, emoji
+    except: return "12°C", "Helder", "80%", "☀️"
 
 # ====================== LIVE DATA & VERWERKING ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -132,29 +122,23 @@ if st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = stand_gisteren if stand_gisteren else kwh_nu
 
 oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 1)
-
 st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
 
-if not monthly_summary.empty:
-    if huidige_maand_jaar in monthly_summary['Maand'].values:
-        monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
-    else:
-        nieuwe_rij_m = pd.DataFrame({'Maand': [huidige_maand_jaar], 'Oogst/dag': [oogst_vandaag]})
-        monthly_summary = pd.concat([monthly_summary, nieuwe_rij_m], ignore_index=True)
-    monthly_summary = monthly_summary.sort_values('Maand', ascending=False)
+if not monthly_summary.empty and huidige_maand_jaar in monthly_summary['Maand'].values:
+    monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
 
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
 # ====================== UI ======================
 st.title("☀️ Solar Piek PRO")
-temp, cond, hum, weather_emoji = get_weather_with_emoji()
-w1, w2, w3 = st.columns(3)
-w1.metric("🌡️ Temp", temp)
-w2.metric(f"{weather_emoji} Weer", cond)
-w3.metric("💧 Vocht", hum)
+w_temp, w_cond, w_hum, w_emoji = get_weather_data()
+colw1, colw2, colw3 = st.columns(3)
+colw1.metric("🌡️ Temp", w_temp)
+colw2.metric(f"☀️ {w_cond}", w_emoji) # Conditie in de titel, Emoji groot eronder
+colw3.metric("💧 Vocht", w_hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)

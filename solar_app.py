@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.9 - MONTH SORT UPDATE
+# SOLAR PIEK PRO v13.9 - NOCTURNAL FILTER
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -66,7 +66,6 @@ if df_raw is not None:
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         
-        # Maandoverzicht - NU GESORTEERD OP DATUM (Nieuwste eerst)
         df_hist = df_full[df_full['Datum'] != vandaag_nl]
         monthly_summary = df_hist.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
@@ -87,7 +86,10 @@ def fetch_hw_data(url):
         kwh = float(r.get('total_power_export_kwh', 0))
         if kwh == 0:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
-        return (power if power >= 10 else 0), kwh, "🟢"
+        
+        # FILTER: Als power 15W of lager is, zet op 0 (negeert de 10W sluipverbruik)
+        filtered_power = power if power >= 15 else 0
+        return filtered_power, kwh, "🟢"
     except: return 0, 0, "🔴"
 
 def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
@@ -131,7 +133,6 @@ st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
 
-# Maandoverzicht updaten en opnieuw sorteren
 if not monthly_summary.empty:
     if huidige_maand_jaar in monthly_summary['Maand'].values:
         monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
@@ -171,10 +172,5 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 with st.expander("☀️⚡ Historiek & Maandoverzicht"):
     st.subheader("Maandtotalen")
     st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
-    st.divider()
-    st.subheader(f"Dagoogst {nu.strftime('%B %Y')}")
-    vandaag_rij = pd.DataFrame({'Datum': [vandaag_nl], 'Symo': [st.session_state.p_symo_peak], 'Galvo': [st.session_state.p_galvo_peak], 'Totaal': [st.session_state.p_total_peak], 'Oogst/dag': [oogst_vandaag], 'StartKWhdag': [st.session_state.start_kwh_dag], 'KWhdag': [round(kwh_nu, 1)]})
-    st.dataframe(pd.concat([vandaag_rij, df_display], ignore_index=True).round(1), hide_index=True, use_container_width=True)
-
-time.sleep(1)
-st.rerun()
+    st.subheader(f"Details {huidige_maand_jaar}")
+    st.dataframe(df_display, hide_index=True, use_container_width=True)

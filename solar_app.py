@@ -173,6 +173,10 @@ with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_g
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
 with st.expander("☀️⚡ Historiek & Maandoverzicht", expanded=True):
+    from streamlit_autorefresh import st_autorefresh
+
+# Refresh elke 2000 milliseconden (2 seconden)
+count = st_autorefresh(interval=2000, limit=None, key="fscounter")
     st.subheader("Maandtotalen")
     st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
     st.subheader(f"Details {huidige_maand_jaar}")

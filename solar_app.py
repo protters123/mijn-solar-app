@@ -96,10 +96,20 @@ def fetch_mppt_data():
     try:
         r = requests.get(URL_SYMO_MPPT, timeout=1.5).json()
         d = r['Body']['Data']
-        p1 = d.get('UDC', {}).get('Value', 0) * d.get('IDC', {}).get('Value', 0)
-        p2 = d.get('UDC_2', {}).get('Value', 0) * d.get('IDC_2', {}).get('Value', 0)
-        return round(p1, 1), round(p2, 1)
-    except: return 0.0, 0.0
+        
+        # Check verschillende mogelijke veldnamen voor MPPT 1
+        u1 = d.get('UDC', {}).get('Value') or d.get('UDC_1', {}).get('Value', 0)
+        i1 = d.get('IDC', {}).get('Value') or d.get('IDC_1', {}).get('Value', 0)
+        
+        # MPPT 2
+        u2 = d.get('UDC_2', {}).get('Value', 0)
+        i2 = d.get('IDC_2', {}).get('Value', 0)
+        
+        p1 = round(u1 * i1, 1)
+        p2 = round(u2 * i2, 1)
+        return p1, p2
+    except:
+        return 0.0, 0.0
 
 def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
     nu_ts = time.time()

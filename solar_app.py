@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.9 - MPPT INTEGRATED
+# SOLAR PIEK PRO v13.9 - FULL RESTORE + MPPT
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -16,7 +16,6 @@ WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCp
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-# Specifieke URL voor MPPT data van de Symo
 URL_SYMO_MPPT = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1&DataCollection=CommonInverterData"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
@@ -79,6 +78,7 @@ if df_raw is not None:
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
+        df_display = df_sorted[(df_sorted['Maand'] == huidige_maand_jaar) & (df_sorted['Datum'] != vandaag_nl)].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
 # ====================== FUNCTIES ======================
@@ -94,7 +94,7 @@ def fetch_hw_data(url):
 
 def fetch_mppt_data():
     try:
-        r = requests.get(URL_SYMO_MPPT, timeout=2).json()
+        r = requests.get(URL_SYMO_MPPT, timeout=1.5).json()
         d = r['Body']['Data']
         p1 = d.get('UDC', {}).get('Value', 0) * d.get('IDC', {}).get('Value', 0)
         p2 = d.get('UDC_2', {}).get('Value', 0) * d.get('IDC_2', {}).get('Value', 0)
@@ -120,7 +120,7 @@ def get_weather_data():
         return p[0], p[1], p[2], ("🌧️" if "regen" in p[1].lower() else "☀️")
     except: return "12°C", "Helder", "80%", "☀️"
 
-# ====================== LIVE DATA VERWERKING ======================
+# ====================== LIVE DATA ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 st.session_state.p_mppt1, st.session_state.p_mppt2 = fetch_mppt_data()
@@ -140,22 +140,22 @@ if st.session_state.start_kwh_dag:
 # ====================== UI ======================
 st.title("⚡☀️⚡ Solar Piek PRO")
 w_temp, w_cond, w_hum, w_emoji = get_weather_data()
-cw1, cw2, cw3 = st.columns(3)
-cw1.metric("🌡️ Temp", w_temp)
-cw2.metric(f"{w_emoji} {w_cond}", w_emoji) 
-cw3.metric("💧 Vocht", w_hum)
+c_w1, c_w2, c_w3 = st.columns(3)
+c_w1.metric("🌡️ Temp", w_temp)
+c_w2.metric(f"{w_emoji} {w_cond}", w_emoji)
+c_w3.metric("💧 Vocht", w_hum)
 
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
-st.caption(f"🔄 Laatste sync naar Google Sheets: **{st.session_state.last_sync_time}**")
+st.caption(f"🔄 Laatste sync naar Sheets: **{st.session_state.last_sync_time}**")
 
 ca, cb = st.columns(2)
-with ca: st.metric("⚡ Oogst vandaag", f"{oogst_vandaag:.1f} kWh")
-with cb: st.metric("🏆 All-time Piek", f"{max(all_time_peak_sheet, st.session_state.p_total_peak):,.0f} W")
+ca.metric("⚡ Oogst vandaag", f"{oogst_vandaag:.1f} kWh")
+cb.metric("🏆 All-time Piek", f"{max(all_time_peak_sheet, st.session_state.p_total_peak):,.0f} W")
 
 st.divider()
-st.subheader("Symo MPPT Details (Live DC)")
+st.subheader("Symo MPPT Details (DC Input)")
 m1, m2, m3 = st.columns(3)
 m1.metric("MPPT 1 (West)", f"{st.session_state.p_mppt1:.0f} W")
 m2.metric("MPPT 2 (Oost)", f"{st.session_state.p_mppt2:.0f} W")
@@ -163,10 +163,13 @@ m3.metric("Totaal Symo DC", f"{st.session_state.p_mppt1 + st.session_state.p_mpp
 
 st.divider()
 c1, c2, c3 = st.columns(3)
-with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
-with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
-with c3: st.metric("☀️ Totaal AC", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
+c1.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
+c2.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
+c3.metric("☀️ Totaal AC", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
 with st.expander("☀️⚡ Historiek & Maandoverzicht"):
     st.subheader("Maandtotalen")
     st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
+    st.divider()
+    st.subheader(f"Dagen in {huidige_maand_jaar}")
+    st.dataframe(df_display, hide_index=True, use_container_width=True)

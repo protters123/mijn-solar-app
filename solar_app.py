@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.9 - MPPT & TABLE FIX
+# SOLAR PIEK PRO v14.0 - DEVICE ID FIX (2)
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -16,8 +16,8 @@ WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCp
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-# Basis URL voor MPPT - we voegen de collectie dynamisch toe in de functie
-URL_SYMO_BASE = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1"
+# DEVICE ID IS NU 2 (Geverifieerd via systeeminfo screenshot)
+URL_SYMO_BASE = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=2"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
@@ -64,7 +64,7 @@ if df_raw is not None:
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         
-        # Maandoverzicht (Inclusief vandaag voor live berekening)
+        # Maandoverzicht
         monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
         monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
@@ -74,7 +74,7 @@ if df_raw is not None:
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
         
-        # TABEL FIX: Toon nu ALLE dagen van de huidige maand, inclusief vandaag
+        # Tabel inclusief vandaag
         df_display = df_sorted[df_sorted['Maand'] == huidige_maand_jaar].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
@@ -90,7 +90,7 @@ def fetch_hw_data(url):
     except: return 0, 0, "🔴"
 
 def fetch_mppt_data():
-    # Methode 1: CommonInverterData (Standaard)
+    # We proberen de data op te halen voor DeviceId 2
     try:
         r = requests.get(f"{URL_SYMO_BASE}&DataCollection=CommonInverterData", timeout=1.5).json()
         d = r['Body']['Data']
@@ -98,17 +98,9 @@ def fetch_mppt_data():
         i1 = d.get('IDC', {}).get('Value') or d.get('IDC_1', {}).get('Value', 0)
         u2 = d.get('UDC_2', {}).get('Value', 0)
         i2 = d.get('IDC_2', {}).get('Value', 0)
-        if u1 > 0: return round(u1 * i1, 1), round(u2 * i2, 1)
-    except: pass
-
-    # Methode 2: InverterDirectData (Backup voor sommige firmware versies)
-    try:
-        r = requests.get(f"{URL_SYMO_BASE}&DataCollection=InverterDirectData", timeout=1.5).json()
-        d = r['Body']['Data']
-        p1 = d.get('IDC_1', 0) * d.get('UDC_1', 0)
-        p2 = d.get('IDC_2', 0) * d.get('UDC_2', 0)
-        return round(p1, 1), round(p2, 1)
-    except: return 0.0, 0.0
+        return round(u1 * i1, 1), round(u2 * i2, 1)
+    except:
+        return 0.0, 0.0
 
 def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
     nu_ts = time.time()

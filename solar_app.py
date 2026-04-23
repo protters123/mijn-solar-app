@@ -4,10 +4,14 @@ import time
 import pandas as pd
 from datetime import datetime
 import pytz
+from streamlit_autorefresh import st_autorefresh # Zorg dat je dit installeert via: pip install streamlit-autorefresh
 
 # ==========================================
-# SOLAR PIEK PRO v14.0 - DEVICE ID FIX (2)
+# SOLAR PIEK PRO v14.1 - 2s AUTO-REFRESH
 # ==========================================
+
+# Automatisch verversen elke 2000ms (2 seconden)
+st_autorefresh(interval=2000, key="solar_refresh")
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
@@ -16,7 +20,7 @@ WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCp
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-# DEVICE ID IS NU 2 (Geverifieerd via systeeminfo screenshot)
+# DEVICE ID IS 2 (bevestigd via systeeminfo)
 URL_SYMO_BASE = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=2"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
@@ -64,7 +68,6 @@ if df_raw is not None:
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         
-        # Maandoverzicht
         monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
         monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
@@ -74,14 +77,13 @@ if df_raw is not None:
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
         
-        # Tabel inclusief vandaag
         df_display = df_sorted[df_sorted['Maand'] == huidige_maand_jaar].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
 # ====================== FUNCTIES ======================
 def fetch_hw_data(url):
     try:
-        r = requests.get(url, timeout=1.5).json()
+        r = requests.get(url, timeout=1.2).json()
         power = round(abs(float(r.get('active_power_w', 0))))
         kwh = float(r.get('total_power_export_kwh', 0))
         if kwh == 0:
@@ -90,15 +92,14 @@ def fetch_hw_data(url):
     except: return 0, 0, "🔴"
 
 def fetch_mppt_data():
-    # We proberen de data op te halen voor DeviceId 2
     try:
-        r = requests.get(f"{URL_SYMO_BASE}&DataCollection=CommonInverterData", timeout=1.5).json()
+        r = requests.get(f"{URL_SYMO_BASE}&DataCollection=CommonInverterData", timeout=1.2).json()
         d = r['Body']['Data']
         u1 = d.get('UDC', {}).get('Value') or d.get('UDC_1', {}).get('Value', 0)
         i1 = d.get('IDC', {}).get('Value') or d.get('IDC_1', {}).get('Value', 0)
         u2 = d.get('UDC_2', {}).get('Value', 0)
         i2 = d.get('IDC_2', {}).get('Value', 0)
-        return round(u1 * i1, 1), round(u2 * i2, 1)
+        return round(u1 * i1, 0), round(u2 * i2, 0)
     except:
         return 0.0, 0.0
 
@@ -139,7 +140,7 @@ if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
 
 # ====================== UI ======================
-st.title("⚡☀️⚡ Solar Piek PRO")
+st.title("⚡ Solar Piek PRO")
 w_temp, w_cond, w_hum, w_emoji = get_weather_data()
 c_w1, c_w2, c_w3 = st.columns(3)
 c_w1.metric("🌡️ Temp", w_temp)
@@ -149,7 +150,7 @@ c_w3.metric("💧 Vocht", w_hum)
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
-st.caption(f"🔄 Laatste sync naar Sheets: **{st.session_state.last_sync_time}**")
+st.caption(f"🔄 Laatste sync: **{st.session_state.last_sync_time}** | Auto-refresh: 2s")
 
 ca, cb = st.columns(2)
 ca.metric("⚡ Oogst vandaag", f"{oogst_vandaag:.1f} kWh")
@@ -168,9 +169,7 @@ c1.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,
 c2.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 c3.metric("☀️ Totaal AC", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
-with st.expander("☀️⚡ Historiek & Maandoverzicht", expanded=True):
-    st.subheader(f"Dagen in {huidige_maand_jaar}")
+with st.expander("☀️ Historiek & Maandoverzicht", expanded=True):
     st.dataframe(df_display, hide_index=True, use_container_width=True)
-    st.divider()
     st.subheader("Maandtotalen")
     st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)

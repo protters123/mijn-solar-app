@@ -86,16 +86,7 @@ def get_weather_data():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
-        temp, cond, hum = p[0], p[1], p[2]
-        c = cond.lower()
-        emoji = "☀️"
-        if "regen" in c or "buien" in c: emoji = "🌧️"
-        elif "bewolkt" in c or "overtrokken" in c: emoji = "☁️"
-        elif "onweer" in c: emoji = "⛈️"
-        elif "mist" in c: emoji = "🌫️"
-        elif "helder" in c or "zonnig" in c: emoji = "☀️"
-        else: emoji = "🌤️"
-        return temp, cond, hum, emoji
+        return p[0], p[1], p[2], ("🌧️" if "regen" in p[1].lower() else "☀️")
     except: return "12°C", "Helder", "80%", "☀️"
 
 # ====================== LIVE DATA & VERWERKING ======================
@@ -120,12 +111,6 @@ if df_raw is not None:
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak_sheet = atp
         
-        vandaag_data = df_full[df_full['Datum'] == vandaag_nl]
-        if not vandaag_data.empty:
-            st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, pd.to_numeric(vandaag_data['Symo'], errors='coerce').max())
-            st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, pd.to_numeric(vandaag_data['Galvo'], errors='coerce').max())
-            st.session_state.p_total_peak = max(st.session_state.p_total_peak, pd.to_numeric(vandaag_data['Totaal'], errors='coerce').max())
-
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
@@ -157,7 +142,7 @@ if st.session_state.start_kwh_dag:
 w_temp, w_cond, w_hum, w_emoji = get_weather_data()
 cw1, cw2, cw3 = st.columns(3)
 cw1.metric("🌡️ Temp", w_temp)
-cw2.metric(f"☀️ {w_cond}", w_emoji) 
+cw2.metric(f"{w_emoji} {w_cond}", w_emoji) 
 cw3.metric("💧 Vocht", w_hum)
 
 st.divider()
@@ -182,7 +167,7 @@ with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_sy
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal AC", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
-with st.expander("☀️⚡ Historiek & Maandoverzicht"):
+with st.expander("☀️⚡ Historiek & Maandoverzicht", expanded=True):
     st.subheader("Maandtotalen")
     st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
     st.divider()

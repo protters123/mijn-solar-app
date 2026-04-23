@@ -6,22 +6,25 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.9 - FULL DASHBOARD RESTORED
+# SOLAR PIEK PRO v13.9 - MPPT INTEGRATED
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
-CSV_URL = f"https://google.com{SHEET_ID}/export?format=csv&gid=0"
-WEBAPP_URL = "https://google.com"
+CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
+# Specifieke URL voor MPPT data van de Symo
 URL_SYMO_MPPT = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1&DataCollection=CommonInverterData"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
 tz = pytz.timezone('Europe/Brussels')
 nu = datetime.now(tz)
+vandaag_nl = nu.strftime('%d-%m-%Y')
+huidige_maand_jaar = nu.strftime('%m-%Y') 
 vandaag_iso = nu.strftime('%Y-%m-%d')
 
 # --- INITIALISATIE ---
@@ -37,18 +40,6 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
     st.session_state.last_sheet_update = 0
     st.session_state.initialized = True
 
-# --- LIVE DATA OPHALEN (SYMO MPPT) ---
-def get_live_mppt():
-    try:
-        res = requests.get(URL_SYMO_MPPT, timeout=3).json()
-        d = res['Body']['Data']
-        p1 = d.get('UDC', {}).get('Value', 0) * d.get('IDC', {}).get('Value', 0)
-        p2 = d.get('UDC_2', {}).get('Value', 0) * d.get('IDC_2', {}).get('Value', 0)
-        return round(p1, 1), round(p2, 1)
-    except: return 0.0, 0.0
-
-st.session_state.p_mppt1, st.session_state.p_mppt2 = get_live_mppt()
-
 # ====================== DATA LADEN ======================
 @st.cache_data(ttl=60)
 def load_historical_data(url):
@@ -57,33 +48,125 @@ def load_historical_data(url):
     except: return None
 
 df_raw = load_historical_data(CSV_URL)
+df_display = pd.DataFrame()
+monthly_summary = pd.DataFrame()
+stand_gisteren = None
+all_time_peak_sheet = 3729.0
 
-# --- HEADER EN LIVE METRICS ---
-st.title("⚡ Solar Piek PRO")
-
-# MPPT kolommen
-m1, m2, m3 = st.columns(3)
-m1.metric("MPPT 1 (West)", f"{st.session_state.p_mppt1} W")
-m2.metric("MPPT 2 (Oost)", f"{st.session_state.p_mppt2} W")
-m3.metric("Symo Totaal DC", f"{round(st.session_state.p_mppt1 + st.session_state.p_mppt2, 1)} W")
-
-st.divider()
-
-# --- VERWERKING HISTORISCHE DATA ---
 if df_raw is not None:
     try:
-        # Hier herstellen we je volledige tabel weergave
         df_full = df_raw.iloc[:, :7].copy()
-        df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWh']
+        df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
+        atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
+        if atp > 0: all_time_peak_sheet = atp
         
-        # Weergeven van de hoofdtabel (zoals in je screenshot)
-        st.subheader("Historische Gegevens")
-        st.dataframe(df_full.tail(10), use_container_width=True) # Toon laatste 10 dagen
+        vandaag_data = df_full[df_full['Datum'] == vandaag_nl]
+        if not vandaag_data.empty:
+            st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, pd.to_numeric(vandaag_data['Symo'], errors='coerce').max())
+            st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, pd.to_numeric(vandaag_data['Galvo'], errors='coerce').max())
+            st.session_state.p_total_peak = max(st.session_state.p_total_peak, pd.to_numeric(vandaag_data['Totaal'], errors='coerce').max())
+
+        df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
+        df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
+        df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         
-        # Voeg hier eventuele extra grafieken of berekeningen toe die je miste
-        # ...
-        
-    except Exception as e:
-        st.error(f"Fout bij dataverwerking: {e}")
-else:
-    st.warning("Kon geen gegevens laden uit Google Sheets.")
+        df_hist = df_full[df_full['Datum'] != vandaag_nl]
+        monthly_summary = df_hist.groupby('Maand')['Oogst/dag'].sum().reset_index()
+        monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
+        monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
+
+        df_sorted = df_full.sort_values('temp_date', ascending=False)
+        gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
+        if not gisteren_df.empty:
+            stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
+    except: pass
+
+# ====================== FUNCTIES ======================
+def fetch_hw_data(url):
+    try:
+        r = requests.get(url, timeout=1.5).json()
+        power = round(abs(float(r.get('active_power_w', 0))))
+        kwh = float(r.get('total_power_export_kwh', 0))
+        if kwh == 0:
+            kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
+        return (power if power >= 10 else 0), kwh, "🟢"
+    except: return 0, 0, "🔴"
+
+def fetch_mppt_data():
+    try:
+        r = requests.get(URL_SYMO_MPPT, timeout=2).json()
+        d = r['Body']['Data']
+        p1 = d.get('UDC', {}).get('Value', 0) * d.get('IDC', {}).get('Value', 0)
+        p2 = d.get('UDC_2', {}).get('Value', 0) * d.get('IDC_2', {}).get('Value', 0)
+        return round(p1, 1), round(p2, 1)
+    except: return 0.0, 0.0
+
+def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
+    nu_ts = time.time()
+    if (nu_ts - st.session_state.last_sheet_update > 30):
+        try:
+            payload = {"datum": vandaag_nl, "symo": int(s_peak), "galvo": int(g_peak), "totaal": int(t_peak), 
+                       "oogst": float(oogst), "start_kwh": float(start_kwh), "kwh_nu": float(kwh_nu), "actie": "update"}
+            requests.post(WEBAPP_URL, json=payload, timeout=5)
+            st.session_state.last_sheet_update = nu_ts
+            st.session_state.last_sync_time = datetime.now(tz).strftime('%H:%M:%S')
+        except: pass
+
+@st.cache_data(ttl=1800)
+def get_weather_data():
+    try:
+        r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
+        p = r.text.strip().split('|')
+        return p[0], p[1], p[2], ("🌧️" if "regen" in p[1].lower() else "☀️")
+    except: return "12°C", "Helder", "80%", "☀️"
+
+# ====================== LIVE DATA VERWERKING ======================
+val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
+val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
+st.session_state.p_mppt1, st.session_state.p_mppt2 = fetch_mppt_data()
+val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
+
+if st.session_state.start_kwh_dag is None:
+    st.session_state.start_kwh_dag = stand_gisteren if stand_gisteren else kwh_nu
+
+oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_nu)), 1)
+st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
+st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
+st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
+
+if st.session_state.start_kwh_dag:
+    sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
+
+# ====================== UI ======================
+st.title("⚡☀️⚡ Solar Piek PRO")
+w_temp, w_cond, w_hum, w_emoji = get_weather_data()
+cw1, cw2, cw3 = st.columns(3)
+cw1.metric("🌡️ Temp", w_temp)
+cw2.metric(f"{w_emoji} {w_cond}", w_emoji) 
+cw3.metric("💧 Vocht", w_hum)
+
+st.divider()
+st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
+st.progress(min(val_t / 8000, 1.0))
+st.caption(f"🔄 Laatste sync naar Google Sheets: **{st.session_state.last_sync_time}**")
+
+ca, cb = st.columns(2)
+with ca: st.metric("⚡ Oogst vandaag", f"{oogst_vandaag:.1f} kWh")
+with cb: st.metric("🏆 All-time Piek", f"{max(all_time_peak_sheet, st.session_state.p_total_peak):,.0f} W")
+
+st.divider()
+st.subheader("Symo MPPT Details (Live DC)")
+m1, m2, m3 = st.columns(3)
+m1.metric("MPPT 1 (West)", f"{st.session_state.p_mppt1:.0f} W")
+m2.metric("MPPT 2 (Oost)", f"{st.session_state.p_mppt2:.0f} W")
+m3.metric("Totaal Symo DC", f"{st.session_state.p_mppt1 + st.session_state.p_mppt2:.0f} W")
+
+st.divider()
+c1, c2, c3 = st.columns(3)
+with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
+with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
+with c3: st.metric("☀️ Totaal AC", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
+
+with st.expander("☀️⚡ Historiek & Maandoverzicht"):
+    st.subheader("Maandtotalen")
+    st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)

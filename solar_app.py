@@ -5,17 +5,16 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-# Probeer autorefresh, anders handmatig
+# Probeer autorefresh voor de 2-seconden update
 try:
     from streamlit_autorefresh import st_autorefresh
 except:
     st_autorefresh = None
 
 # ==========================================
-# SOLAR PIEK PRO v14.3 - PERFORMANCE FIX
+# SOLAR PIEK PRO v14.4 - FULL RESTORE
 # ==========================================
 
-# Ververs de UI elke 2 seconden
 if st_autorefresh:
     st_autorefresh(interval=2000, key="solar_refresh")
 
@@ -24,7 +23,7 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-# Gebruik DeviceId 2 zoals gezien in je systeeminfo
+# Gebruik DeviceId 2 voor de Symo MPPT data
 URL_SYMO_MPPT = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=2&DataCollection=CommonInverterData"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
@@ -44,10 +43,11 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
 # ====================== DATA FUNCTIES ======================
 
 @st.cache_data(ttl=60)
-def load_historical_data(url):
+def load_full_data(url):
     try:
         df = pd.read_csv(f"{url}&ts={int(time.time()/60)}", header=0, decimal=",")
-        df['temp_date'] = pd.to_datetime(df.iloc[:,0], dayfirst=True, errors='coerce')
+        df.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWhdag']
+        df['temp_date'] = pd.to_datetime(df['Datum'], dayfirst=True, errors='coerce')
         df['Maand'] = df['temp_date'].dt.strftime('%m-%Y')
         return df
     except: return None
@@ -60,9 +60,8 @@ def fetch_hw_data(url):
         return (power if power >= 10 else 0), kwh, "🟢"
     except: return 0, 0, "🔴"
 
-# We cachen de MPPT data voor 10 seconden om de omvormer te ontlasten
 @st.cache_data(ttl=10)
-def fetch_mppt_data(url):
+def fetch_mppt_live(url):
     try:
         r = requests.get(url, timeout=1.5).json()
         d = r['Body']['Data']
@@ -71,33 +70,49 @@ def fetch_mppt_data(url):
         u2 = d.get('UDC_2', {}).get('Value', 0)
         i2 = d.get('IDC_2', {}).get('Value', 0)
         return round(u1 * i1, 0), round(u2 * i2, 0)
-    except:
-        return 0.0, 0.0
+    except: return 0.0, 0.0
 
-# ====================== LIVE DATA OPHALEN ======================
+# ====================== DATA OPHALEN ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
-# Haal MPPT waarden op
-st.session_state.p_mppt1, st.session_state.p_mppt2 = fetch_mppt_data(URL_SYMO_MPPT)
-
 val_t = val_s + val_g
-df_full = load_historical_data(CSV_URL)
+
+# MPPT waarden
+st.session_state.p_mppt1, st.session_state.p_mppt2 = fetch_mppt_live(URL_SYMO_MPPT)
+
+# Historiek laden
+df_full = load_full_data(CSV_URL)
 
 # ====================== UI WEERGAVE ======================
 st.title("⚡ Solar Piek PRO")
 
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
-st.caption(f"🔄 Update: {datetime.now(tz).strftime('%H:%M:%S')} | Status: {dot_s} Symo {dot_g} Galvo")
+st.caption(f"🔄 Update: {datetime.now(tz).strftime('%H:%M:%S')} | Symo: {dot_s} Galvo: {dot_g}")
 
 st.divider()
-st.subheader("Symo MPPT Details (Live DC Input)")
+st.subheader("Symo MPPT Details (Live DC)")
 m1, m2, m3 = st.columns(3)
 m1.metric("MPPT 1 (West)", f"{st.session_state.p_mppt1:.0f} W")
 m2.metric("MPPT 2 (Oost)", f"{st.session_state.p_mppt2:.0f} W")
-m3.metric("Totaal DC", f"{st.session_state.p_mppt1 + st.session_state.p_mppt2:.0f} W")
+m3.metric("Totaal Symo DC", f"{st.session_state.p_mppt1 + st.session_state.p_mppt2:.0f} W")
 
-with st.expander("☀️ Historiek & Overzicht"):
+st.divider()
+
+with st.expander("☀️ Historiek & Maandoverzicht", expanded=True):
     if df_full is not None:
-        # Laatste 10 dagen
-        st.dataframe(df_full.sort_values('temp_date', ascending=False).head(10), hide_index=True)
+        # Maandtotalen
+        st.subheader("Maandtotalen")
+        df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
+        monthly = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
+        monthly['temp_sort'] = pd.to_datetime(monthly['Maand'], format='%m-%Y')
+        monthly = monthly.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
+        st.dataframe(monthly.round(1), hide_index=True, use_container_width=True)
+        
+        st.divider()
+        
+        # Dagen van deze maand
+        st.subheader(f"Dagen in {huidige_maand_jaar}")
+        df_sorted = df_full.sort_values('temp_date', ascending=False)
+        df_display = df_sorted[df_sorted['Maand'] == huidige_maand_jaar].drop(columns=['temp_date', 'Maand']).copy()
+        st.dataframe(df_display, hide_index=True, use_container_width=True)

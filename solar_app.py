@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.9 - FULL RESTORE + MPPT
+# SOLAR PIEK PRO v13.9 - MPPT & TABLE FIX
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -16,7 +16,8 @@ WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCp
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-URL_SYMO_MPPT = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1&DataCollection=CommonInverterData"
+# Basis URL voor MPPT - we voegen de collectie dynamisch toe in de functie
+URL_SYMO_BASE = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
@@ -59,18 +60,12 @@ if df_raw is not None:
         atp = pd.to_numeric(df_full['Totaal'], errors='coerce').max()
         if atp > 0: all_time_peak_sheet = atp
         
-        vandaag_data = df_full[df_full['Datum'] == vandaag_nl]
-        if not vandaag_data.empty:
-            st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, pd.to_numeric(vandaag_data['Symo'], errors='coerce').max())
-            st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, pd.to_numeric(vandaag_data['Galvo'], errors='coerce').max())
-            st.session_state.p_total_peak = max(st.session_state.p_total_peak, pd.to_numeric(vandaag_data['Totaal'], errors='coerce').max())
-
         df_full['temp_date'] = pd.to_datetime(df_full['Datum'], dayfirst=True, errors='coerce')
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         
-        df_hist = df_full[df_full['Datum'] != vandaag_nl]
-        monthly_summary = df_hist.groupby('Maand')['Oogst/dag'].sum().reset_index()
+        # Maandoverzicht (Inclusief vandaag voor live berekening)
+        monthly_summary = df_full.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
         monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
 
@@ -78,7 +73,9 @@ if df_raw is not None:
         gisteren_df = df_sorted[df_sorted['Datum'] != vandaag_nl]
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
-        df_display = df_sorted[(df_sorted['Maand'] == huidige_maand_jaar) & (df_sorted['Datum'] != vandaag_nl)].drop(columns=['temp_date', 'Maand']).copy()
+        
+        # TABEL FIX: Toon nu ALLE dagen van de huidige maand, inclusief vandaag
+        df_display = df_sorted[df_sorted['Maand'] == huidige_maand_jaar].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
 # ====================== FUNCTIES ======================
@@ -93,23 +90,25 @@ def fetch_hw_data(url):
     except: return 0, 0, "🔴"
 
 def fetch_mppt_data():
+    # Methode 1: CommonInverterData (Standaard)
     try:
-        r = requests.get(URL_SYMO_MPPT, timeout=1.5).json()
+        r = requests.get(f"{URL_SYMO_BASE}&DataCollection=CommonInverterData", timeout=1.5).json()
         d = r['Body']['Data']
-        
-        # Check verschillende mogelijke veldnamen voor MPPT 1
         u1 = d.get('UDC', {}).get('Value') or d.get('UDC_1', {}).get('Value', 0)
         i1 = d.get('IDC', {}).get('Value') or d.get('IDC_1', {}).get('Value', 0)
-        
-        # MPPT 2
         u2 = d.get('UDC_2', {}).get('Value', 0)
         i2 = d.get('IDC_2', {}).get('Value', 0)
-        
-        p1 = round(u1 * i1, 1)
-        p2 = round(u2 * i2, 1)
-        return p1, p2
-    except:
-        return 0.0, 0.0
+        if u1 > 0: return round(u1 * i1, 1), round(u2 * i2, 1)
+    except: pass
+
+    # Methode 2: InverterDirectData (Backup voor sommige firmware versies)
+    try:
+        r = requests.get(f"{URL_SYMO_BASE}&DataCollection=InverterDirectData", timeout=1.5).json()
+        d = r['Body']['Data']
+        p1 = d.get('IDC_1', 0) * d.get('UDC_1', 0)
+        p2 = d.get('IDC_2', 0) * d.get('UDC_2', 0)
+        return round(p1, 1), round(p2, 1)
+    except: return 0.0, 0.0
 
 def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
     nu_ts = time.time()
@@ -177,9 +176,9 @@ c1.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,
 c2.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 c3.metric("☀️ Totaal AC", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
-with st.expander("☀️⚡ Historiek & Maandoverzicht"):
-    st.subheader("Maandtotalen")
-    st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
-    st.divider()
+with st.expander("☀️⚡ Historiek & Maandoverzicht", expanded=True):
     st.subheader(f"Dagen in {huidige_maand_jaar}")
     st.dataframe(df_display, hide_index=True, use_container_width=True)
+    st.divider()
+    st.subheader("Maandtotalen")
+    st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)

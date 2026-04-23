@@ -16,7 +16,7 @@ WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCp
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-# MPPT API URL
+# API voor MPPT details (DeviceId 1 is meestal de Symo)
 URL_SYMO_MPPT = f"http://{PUBLIEK_IP}:8081/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1&DataCollection=CommonInverterData"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
@@ -40,18 +40,20 @@ if 'initialized' not in st.session_state or st.session_state.huidige_datum != va
     st.session_state.last_sheet_update = 0
     st.session_state.initialized = True
 
-# --- MPPT DATA FETCH ---
-def get_mppt_data():
+# --- MPPT DATA FUNCTIE ---
+def get_mppt_values():
     try:
         res = requests.get(URL_SYMO_MPPT, timeout=3).json()
         d = res['Body']['Data']
+        # Berekening: Spanning (V) * Stroom (A) = Watt
         p1 = d.get('UDC', {}).get('Value', 0) * d.get('IDC', {}).get('Value', 0)
         p2 = d.get('UDC_2', {}).get('Value', 0) * d.get('IDC_2', {}).get('Value', 0)
         return round(p1, 1), round(p2, 1)
     except:
         return 0.0, 0.0
 
-st.session_state.p_mppt1, st.session_state.p_mppt2 = get_mppt_data()
+# Update MPPT waarden in session state
+st.session_state.p_mppt1, st.session_state.p_mppt2 = get_mppt_values()
 
 # ====================== DATA LADEN ======================
 @st.cache_data(ttl=60)
@@ -61,26 +63,28 @@ def load_historical_data(url):
     except: return None
 
 df_raw = load_historical_data(CSV_URL)
-df_display = pd.DataFrame()
-monthly_summary = pd.DataFrame()
-stand_gisteren = None
 all_time_peak_sheet = 3729.0
 
+# ====================== UI WEERGAVE ======================
+st.title("⚡ Solar Piek PRO")
+
+# MPPT Sectie bovenaan
+m1, m2, m_tot = st.columns(3)
+with m1:
+    st.metric("MPPT 1 (West)", f"{st.session_state.p_mppt1} W")
+with m2:
+    st.metric("MPPT 2 (Oost)", f"{st.session_state.p_mppt2} W")
+with m_tot:
+    totaal_dc = round(st.session_state.p_mppt1 + st.session_state.p_mppt2, 1)
+    st.metric("Symo Totaal DC", f"{totaal_dc} W")
+
+st.divider()
+
+# Historische data tabel
 if df_raw is not None:
     try:
         df_full = df_raw.iloc[:, :7].copy()
         df_full.columns = ['Datum', 'Symo', 'Galvo', 'Totaal', 'Oogst/dag', 'StartKWhdag', 'KWh']
-        
-        # --- HIER KUN JE DE MPPT METRICS TONEN IN JE DASHBOARD ---
-        st.title("⚡ Solar Piek PRO")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("MPPT 1 (West)", f"{st.session_state.p_mppt1} W")
-        c2.metric("MPPT 2 (Oost)", f"{st.session_state.p_mppt2} W")
-        c3.metric("Symo Totaal DC", f"{round(st.session_state.p_mppt1 + st.session_state.p_mppt2, 1)} W")
-        st.divider()
-
-        # [Hier gaat de rest van je originele weergave code verder...]
-        st.write(df_full.head()) # Voorbeeld: je originele tabel of grafieken
-        
+        st.dataframe(df_full, use_container_width=True)
     except Exception as e:
-        st.error(f"Fout bij verwerken data: {e}")
+        st.error(f"Fout bij laden tabel: {e}")

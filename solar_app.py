@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.9 - LIVE TABLE & FILTER
+# SOLAR PIEK PRO v13.9 - LIVE
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -14,10 +14,8 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
-# Pas deze twee regels aan in je code:
-URL_1 = f"http://{PUBLIEK_IP}:8080/api/v1/data"  # Was 8081, moet 8080 zijn volgens je router
-URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"  # Deze staat goed op 8082
-
+URL_1 = f"http://{PUBLIEK_IP}:8080/api/v1/data" 
+URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
@@ -127,11 +125,6 @@ val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
 
-# --- DEBUG MELDING BIJ VERBINDINGSFOUT ---
-if dot_s == "🔴" or dot_g == "🔴":
-    st.error(f"⚠️ Geen verbinding met meters! Check of {PUBLIEK_IP} nog klopt.")
-    st.info("💡 Tip: Controleer of de 'Lokale API' nog aan staat in de HomeWizard app.")
-
 if st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = stand_gisteren if stand_gisteren else kwh_nu
 
@@ -175,11 +168,3 @@ c1, c2, c3 = st.columns(3)
 with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
-
-with st.expander("☀️⚡ Historiek & Maandoverzicht"):
-    if not monthly_summary.empty:
-        st.subheader("Maandtotalen")
-        st.dataframe(monthly_summary, use_container_width=True)
-    if not df_display.empty:
-        st.subheader(f"Details {huidige_maand_jaar}")
-        st.dataframe(df_display, use_container_width=True)

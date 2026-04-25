@@ -4,10 +4,15 @@ import time
 import pandas as pd
 from datetime import datetime
 import pytz
+from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
 # SOLAR PIEK PRO v13.9 - LIVE
 # ==========================================
+
+# REFRESH INSTALLLATIE: Ververs elke 2 seconden (2000ms)
+# 1 seconde kan soms te snel zijn voor de HomeWizard API/Router
+st_autorefresh(interval=2000, key="datarefresh")
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
@@ -103,20 +108,19 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
             st.session_state.last_sync_time = datetime.now(tz).strftime('%H:%M:%S')
         except: pass
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=3600) # Weer hoeft maar 1x per uur echt ververst te worden
 def get_weather_data():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
         temp, cond, hum = p[0], p[1], p[2]
         c = cond.lower()
-        emoji = "☀️"
+        emoji = "🌤️"
         if "regen" in c or "buien" in c: emoji = "🌧️"
         elif "bewolkt" in c or "overtrokken" in c: emoji = "☁️"
         elif "onweer" in c: emoji = "⛈️"
         elif "mist" in c: emoji = "🌫️"
         elif "helder" in c or "zonnig" in c: emoji = "☀️"
-        else: emoji = "🌤️"
         return temp, cond, hum, emoji
     except: return "12°C", "Helder", "80%", "☀️"
 
@@ -135,13 +139,9 @@ st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
 
 if not monthly_summary.empty:
     if huidige_maand_jaar in monthly_summary['Maand'].values:
-        monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
-    else:
-        nieuwe_rij_m = pd.DataFrame({'Maand': [huidige_maand_jaar], 'Oogst/dag': [oogst_vandaag]})
-        monthly_summary = pd.concat([monthly_summary, nieuwe_rij_m], ignore_index=True)
-    
-    monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
-    monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
+        # Update alleen voor de weergave, niet permanent in de DF om optelfouten te voorkomen
+        idx = monthly_summary[monthly_summary['Maand'] == huidige_maand_jaar].index
+        monthly_summary.at[idx[0], 'Oogst/dag'] += oogst_vandaag
 
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
@@ -151,7 +151,7 @@ st.title("⚡☀️⚡ Solar Piek PRO")
 w_temp, w_cond, w_hum, w_emoji = get_weather_data()
 colw1, colw2, colw3 = st.columns(3)
 colw1.metric("🌡️ Temp", w_temp)
-colw2.metric(f"☀️ {w_cond}", w_emoji) 
+colw2.metric(f"{w_emoji} {w_cond}", w_emoji) 
 colw3.metric("💧 Vocht", w_hum)
 
 st.divider()
@@ -169,7 +169,6 @@ with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_sy
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
-# --- HISTORIEK TERUGGEPLAATST ---
 with st.expander("☀️⚡ Historiek & Maandoverzicht"):
     if not monthly_summary.empty:
         st.subheader("Maandtotalen")

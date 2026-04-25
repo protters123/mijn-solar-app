@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v13.9 - REFRESH & PORT FIX
+# SOLAR PIEK PRO v13.9 - MONTH SORT UPDATE
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -14,8 +14,7 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
-# AANGEPAST NAAR EXACTE POORTEN UIT JE ROUTER SCREENSHOT:
-URL_1 = f"http://{PUBLIEK_IP}:8080/api/v1/data"
+URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
@@ -67,6 +66,7 @@ if df_raw is not None:
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         
+        # Maandoverzicht - NU GESORTEERD OP DATUM (Nieuwste eerst)
         df_hist = df_full[df_full['Datum'] != vandaag_nl]
         monthly_summary = df_hist.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
@@ -106,7 +106,16 @@ def get_weather_data():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
-        return p[0], p[1], p[2], "☀️"
+        temp, cond, hum = p[0], p[1], p[2]
+        c = cond.lower()
+        emoji = "☀️"
+        if "regen" in c or "buien" in c: emoji = "🌧️"
+        elif "bewolkt" in c or "overtrokken" in c: emoji = "☁️"
+        elif "onweer" in c: emoji = "⛈️"
+        elif "mist" in c: emoji = "🌫️"
+        elif "helder" in c or "zonnig" in c: emoji = "☀️"
+        else: emoji = "🌤️"
+        return temp, cond, hum, emoji
     except: return "12°C", "Helder", "80%", "☀️"
 
 # ====================== LIVE DATA & VERWERKING ======================
@@ -121,6 +130,17 @@ oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_n
 st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
+
+# Maandoverzicht updaten en opnieuw sorteren
+if not monthly_summary.empty:
+    if huidige_maand_jaar in monthly_summary['Maand'].values:
+        monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
+    else:
+        nieuwe_rij_m = pd.DataFrame({'Maand': [huidige_maand_jaar], 'Oogst/dag': [oogst_vandaag]})
+        monthly_summary = pd.concat([monthly_summary, nieuwe_rij_m], ignore_index=True)
+    
+    monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
+    monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
 
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
@@ -148,14 +168,13 @@ with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_sy
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
-with st.expander("☀️⚡ Historiek & Maandoverzicht", expanded=True):
+with st.expander("☀️⚡ Historiek & Maandoverzicht"):
     st.subheader("Maandtotalen")
-    if not monthly_summary.empty:
-        st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
+    st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
+    st.divider()
     st.subheader(f"Dagoogst {nu.strftime('%B %Y')}")
-    if not df_display.empty:
-        st.dataframe(df_display, hide_index=True, use_container_width=True)
+    vandaag_rij = pd.DataFrame({'Datum': [vandaag_nl], 'Symo': [st.session_state.p_symo_peak], 'Galvo': [st.session_state.p_galvo_peak], 'Totaal': [st.session_state.p_total_peak], 'Oogst/dag': [oogst_vandaag], 'StartKWhdag': [st.session_state.start_kwh_dag], 'KWhdag': [round(kwh_nu, 1)]})
+    st.dataframe(pd.concat([vandaag_rij, df_display], ignore_index=True).round(1), hide_index=True, use_container_width=True)
 
-# De automatische verversing (elke seconde)
 time.sleep(1)
 st.rerun()

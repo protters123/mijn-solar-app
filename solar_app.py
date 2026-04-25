@@ -174,5 +174,5 @@ with st.expander("☀️⚡ Historiek & Maandoverzicht"):
         st.dataframe(df_display, use_container_width=True)
 
 # --- DE REFRESH ACTIE ---
-time.sleep(2)
+time.sleep(1)
 st.rerun()

@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # ==========================================
-# SOLAR PIEK PRO v14.2 - VERVERSING & POORT FIX
+# SOLAR PIEK PRO v14.3 - EXACT PORT MATCH
 # ==========================================
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
@@ -14,19 +14,17 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
-# Poorten aangepast op basis van je Orange-router screenshot:
+# Aangepast naar de poorten die in jouw router op "ON" staan:
 URL_1 = f"http://{PUBLIEK_IP}:8080/api/v1/data"
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
-# Automatische verversing van de hele pagina elke seconde
-st.empty()
-if "last_run" not in st.session_state:
-    st.session_state.last_run = time.time()
-
-# Forceer Streamlit om de pagina te herladen
-st.write(f'<meta http-equiv="refresh" content="1">', unsafe_allow_html=True)
+# Real-time refresh mechanisme
+if "count" not in st.session_state:
+    st.session_state.count = 0
+st.session_state.count += 1
+st.write(f'<meta http-equiv="refresh" content="2">', unsafe_allow_html=True)
 
 tz = pytz.timezone('Europe/Brussels')
 nu = datetime.now(tz)
@@ -114,9 +112,8 @@ def get_weather_data():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
         p = r.text.strip().split('|')
-        temp, cond, hum = p[0], p[1], p[2]
-        return temp, cond, hum, "☀️"
-    except: return "12°C", "Helder", "80%", "☀️"
+        return p[0], p[1], p[2], "☀️"
+    except: return "12°C", "Laden...", "80%", "☀️"
 
 # ====================== LIVE DATA & VERWERKING ======================
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
@@ -130,14 +127,6 @@ oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_n
 st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
-
-# Maandoverzicht updaten
-if not monthly_summary.empty:
-    if huidige_maand_jaar in monthly_summary['Maand'].values:
-        monthly_summary.loc[monthly_summary['Maand'] == huidige_maand_jaar, 'Oogst/dag'] += oogst_vandaag
-    
-    monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
-    monthly_summary = monthly_summary.sort_values('temp_sort', ascending=False).drop(columns=['temp_sort'])
 
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
@@ -153,7 +142,7 @@ colw3.metric("💧 Vocht", w_hum)
 st.divider()
 st.markdown(f"<h1 style='text-align:center;color:#FFB300; font-size: 55px;'>⚡ {val_t:,.0f} Watt</h1>", unsafe_allow_html=True)
 st.progress(min(val_t / 8000, 1.0))
-st.caption(f"🔄 Laatste sync naar Google Sheets: **{st.session_state.last_sync_time}**")
+st.caption(f"🔄 Sync: **{st.session_state.last_sync_time}** | Poorten: 8080 & 8082")
 
 ca, cb = st.columns(2)
 with ca: st.metric("⚡ Oogst vandaag", f"{oogst_vandaag:.1f} kWh")
@@ -168,7 +157,5 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 with st.expander("☀️⚡ Historiek & Maandoverzicht", expanded=True):
     st.subheader("Maandtotalen")
     st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
-    
     st.subheader(f"Dagoogst {nu.strftime('%B %Y')}")
     st.dataframe(df_display, hide_index=True, use_container_width=True)
-

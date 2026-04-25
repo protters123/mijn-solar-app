@@ -168,3 +168,12 @@ c1, c2, c3 = st.columns(3)
 with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_symo_peak:,.0f} W")
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
+
+# --- HISTORIEK TERUGGEPLAATST ---
+with st.expander("☀️⚡ Historiek & Maandoverzicht"):
+    if not monthly_summary.empty:
+        st.subheader("Maandtotalen")
+        st.dataframe(monthly_summary, use_container_width=True)
+    if not df_display.empty:
+        st.subheader(f"Details {huidige_maand_jaar}")
+        st.dataframe(df_display, use_container_width=True)

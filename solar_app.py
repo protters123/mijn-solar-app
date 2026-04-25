@@ -14,9 +14,9 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
-# EXACTE POORTEN UIT JE ROUTER SCREENSHOT:
-URL_1 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-URL_2 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
+# AANGEPAST NAAR EXACTE POORTEN UIT JE ROUTER SCREENSHOT:
+URL_1 = f"http://{PUBLIEK_IP}:8080/api/v1/data"
+URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
@@ -150,10 +150,12 @@ with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_to
 
 with st.expander("☀️⚡ Historiek & Maandoverzicht", expanded=True):
     st.subheader("Maandtotalen")
-    st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
+    if not monthly_summary.empty:
+        st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
     st.subheader(f"Dagoogst {nu.strftime('%B %Y')}")
-    st.dataframe(df_display, hide_index=True, use_container_width=True)
+    if not df_display.empty:
+        st.dataframe(df_display, hide_index=True, use_container_width=True)
 
-# De automatische verversing
+# De automatische verversing (elke seconde)
 time.sleep(1)
 st.rerun()

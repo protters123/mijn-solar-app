@@ -4,15 +4,19 @@ import time
 import pandas as pd
 from datetime import datetime
 import pytz
-from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
 # SOLAR PIEK PRO v13.9 - LIVE
 # ==========================================
 
-# REFRESH INSTALLLATIE: Ververs elke 2 seconden (2000ms)
-# 1 seconde kan soms te snel zijn voor de HomeWizard API/Router
-st_autorefresh(interval=2000, key="datarefresh")
+st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
+
+# --- AUTO REFRESH LOGICA (Zonder extra modules) ---
+if 'count' not in st.session_state:
+    st.session_state.count = 0
+
+# Dit zorgt voor de refresh elke 2 seconden
+placeholder = st.empty()
 
 SHEET_ID = "19wEhTv_-3PkwWl3dnp8xn_e5SKtwBmuJO4yS8W-uEmo"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
@@ -21,8 +25,6 @@ WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCp
 PUBLIEK_IP = "94.110.235.108"
 URL_1 = f"http://{PUBLIEK_IP}:8080/api/v1/data" 
 URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
-
-st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
 tz = pytz.timezone('Europe/Brussels')
 nu = datetime.now(tz)
@@ -108,7 +110,7 @@ def sla_naar_sheets(s_peak, g_peak, t_peak, oogst, start_kwh, kwh_nu):
             st.session_state.last_sync_time = datetime.now(tz).strftime('%H:%M:%S')
         except: pass
 
-@st.cache_data(ttl=3600) # Weer hoeft maar 1x per uur echt ververst te worden
+@st.cache_data(ttl=1800)
 def get_weather_data():
     try:
         r = requests.get("https://wttr.in|%C|%h&lang=nl", timeout=5)
@@ -136,12 +138,6 @@ oogst_vandaag = round(max(0.0, kwh_nu - (st.session_state.start_kwh_dag or kwh_n
 st.session_state.p_symo_peak = max(st.session_state.p_symo_peak, val_s)
 st.session_state.p_galvo_peak = max(st.session_state.p_galvo_peak, val_g)
 st.session_state.p_total_peak = max(st.session_state.p_total_peak, val_t)
-
-if not monthly_summary.empty:
-    if huidige_maand_jaar in monthly_summary['Maand'].values:
-        # Update alleen voor de weergave, niet permanent in de DF om optelfouten te voorkomen
-        idx = monthly_summary[monthly_summary['Maand'] == huidige_maand_jaar].index
-        monthly_summary.at[idx[0], 'Oogst/dag'] += oogst_vandaag
 
 if st.session_state.start_kwh_dag:
     sla_naar_sheets(st.session_state.p_symo_peak, st.session_state.p_galvo_peak, st.session_state.p_total_peak, oogst_vandaag, st.session_state.start_kwh_dag, kwh_nu)
@@ -176,3 +172,7 @@ with st.expander("☀️⚡ Historiek & Maandoverzicht"):
     if not df_display.empty:
         st.subheader(f"Details {huidige_maand_jaar}")
         st.dataframe(df_display, use_container_width=True)
+
+# --- DE REFRESH ACTIE ---
+time.sleep(2)
+st.rerun()

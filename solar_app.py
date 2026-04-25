@@ -14,8 +14,10 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
-URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
-URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
+# Pas deze twee regels aan in je code:
+URL_1 = f"http://{PUBLIEK_IP}:8080/api/v1/data"  # Was 8081, moet 8080 zijn volgens je router
+URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"  # Deze staat goed op 8082
+
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 

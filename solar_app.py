@@ -14,8 +14,8 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzl6V4knhaZnB7zgt5kvFkgTCph3Y-3S4KDHJEPzaaU1gqvTIfokzIiFUxDfhiBlIxW/exec"
 
 PUBLIEK_IP = "94.110.235.108"
-URL_1 = f"http://{PUBLIEK_IP}:8080/api/v1/data"
-URL_2 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
+URL_1 = f"http://{PUBLIEK_IP}:8081/api/v1/data"
+URL_2 = f"http://{PUBLIEK_IP}:8082/api/v1/data"
 
 st.set_page_config(page_title="Solar Piek PRO", page_icon="⚡☀️⚡", layout="centered")
 
@@ -66,7 +66,6 @@ if df_raw is not None:
         df_full['Maand'] = df_full['temp_date'].dt.strftime('%m-%Y')
         df_full['Oogst/dag'] = pd.to_numeric(df_full['Oogst/dag'].astype(str).str.replace(',', '.'), errors='coerce')
         
-        # Maandoverzicht (zonder vandaag dubbel te tellen)
         df_hist = df_full[df_full['Datum'] != vandaag_nl]
         monthly_summary = df_hist.groupby('Maand')['Oogst/dag'].sum().reset_index()
         monthly_summary['temp_sort'] = pd.to_datetime(monthly_summary['Maand'], format='%m-%Y')
@@ -77,7 +76,6 @@ if df_raw is not None:
         if not gisteren_df.empty:
             stand_gisteren = pd.to_numeric(gisteren_df['KWhdag'].iloc[0], errors='coerce')
         
-        # AANPASSING: Filter '!= vandaag_nl' verwijderd zodat vandaag ook in de tabel staat
         df_display = df_sorted[(df_sorted['Maand'] == huidige_maand_jaar)].drop(columns=['temp_date', 'Maand']).copy()
     except: pass
 
@@ -90,7 +88,6 @@ def fetch_hw_data(url):
         if kwh == 0:
             kwh = float(r.get('total_power_export_t1_kwh', 0)) + float(r.get('total_power_export_t2_kwh', 0))
         
-        # FILTER: Als power 15W of lager is (sluipverbruik), zet op 0
         filtered_power = power if power >= 15 else 0
         return filtered_power, kwh, "🟢"
     except: return 0, 0, "🔴"
@@ -127,6 +124,11 @@ def get_weather_data():
 val_s, kwh_s, dot_s = fetch_hw_data(URL_1)
 val_g, kwh_g, dot_g = fetch_hw_data(URL_2)
 val_t, kwh_nu = val_s + val_g, kwh_s + kwh_g
+
+# --- DEBUG MELDING BIJ VERBINDINGSFOUT ---
+if dot_s == "🔴" or dot_g == "🔴":
+    st.error(f"⚠️ Geen verbinding met meters! Check of {PUBLIEK_IP} nog klopt.")
+    st.info("💡 Tip: Controleer of de 'Lokale API' nog aan staat in de HomeWizard app.")
 
 if st.session_state.start_kwh_dag is None:
     st.session_state.start_kwh_dag = stand_gisteren if stand_gisteren else kwh_nu
@@ -172,8 +174,10 @@ with c1: st.metric(f"{dot_s} Symo", f"{val_s} W", f"Piek: {st.session_state.p_sy
 with c2: st.metric(f"{dot_g} Galvo", f"{val_g} W", f"Piek: {st.session_state.p_galvo_peak:,.0f} W")
 with c3: st.metric("☀️ Totaal", f"{val_t} W", f"Piek: {st.session_state.p_total_peak:,.0f} W")
 
-with st.expander("☀️⚡ Historiek & Maandoverzicht", expanded=True):
-    st.subheader("Maandtotalen")
-    st.dataframe(monthly_summary.round(1), hide_index=True, use_container_width=True)
-    st.subheader(f"Details {huidige_maand_jaar}")
-    st.dataframe(df_display, hide_index=True, use_container_width=True)
+with st.expander("☀️⚡ Historiek & Maandoverzicht"):
+    if not monthly_summary.empty:
+        st.subheader("Maandtotalen")
+        st.dataframe(monthly_summary, use_container_width=True)
+    if not df_display.empty:
+        st.subheader(f"Details {huidige_maand_jaar}")
+        st.dataframe(df_display, use_container_width=True)
